@@ -14,14 +14,10 @@ plugins {
     id("com.google.devtools.ksp") version "2.1.20-1.0.32" apply false // Room KSP
 }
 
-val composeBom = platform("androidx.compose:compose-bom:2024.12.00")
-
-dependencies {
-    // shared constraint for all modules (modules still declare their own deps)
-    constraints {
-        classpath(composeBom)
-    }
-}
+// Compose BOM is declared by :app itself (implementation(platform("androidx.compose:compose-bom:2024.12.00")));
+// the design-tokens sources are compiled under :app's sourceSets, so no root-level
+// platform constraint is needed. (classpath(...) only resolves in a buildscript
+// dependencies block, which this project does not use.)
 
 // Common Kotlin/Android options applied to all modules that apply them.
 subprojects {

@@ -38,11 +38,7 @@ dependencies {
 
     // Coroutines for SSE streaming
     api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-
-    // Design tokens (shared sealed object)
-    sourceSets {
-        getByName("main") {
-            java.srcDir(project.file("../../design-tokens"))
-        }
-    }
 }
+
+// Design tokens live in :app's sourceSets (the sealed object is Compose-only,
+// used by app UI screens). agent-core has no UI and needs no extra source dir.
