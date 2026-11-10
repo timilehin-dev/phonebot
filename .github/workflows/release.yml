@@ -112,7 +112,9 @@ jobs:
           python3 -m pip install --upgrade pip >/dev/null
           VERSION="${{ github.event.inputs.version || '' }}"
           if [ -z "$VERSION" ] && [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"   # bash strips the v; not valid inside ${{ }}
+            # Strip the leading v using bash parameter expansion (GITHUB_REF_NAME is
+            # "v0.1.0" -> "0.1.0"). Note this is plain bash, not a workflow expression.
+            VERSION="${GITHUB_REF_NAME#v}"
           fi
           [ -z "$VERSION" ] && VERSION="0.0.0-dev"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
