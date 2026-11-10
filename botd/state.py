@@ -377,6 +377,27 @@ class BotState:
             self.queue_path.unlink()
         return events
 
+    def list_wakeup(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Return the oldest ``limit`` pending events WITHOUT removing them.
+
+        Non-mutating counterpart to :meth:`drain_wakeup`; used by the
+        ``list_inbox`` tool so inspecting the queue does not consume it.
+        """
+        out: List[Dict[str, Any]] = []
+        if self.queue_path.exists():
+            with self.queue_path.open("r", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        out.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+                    if len(out) >= limit:
+                        break
+        return out
+
     def wakeup_count(self) -> int:
         """Number of pending events in the journal."""
         if not self.queue_path.exists():

@@ -366,7 +366,8 @@ class AgentLoop:
                     "properties": {
                         "command": {"type": "string"},
                         "cwd": {"type": "string"},
-                        "timeout_s": {"type": "number"},
+                        "env": {"type": "object"},
+                        "timeout_ms": {"type": "number"},
                     },
                     "required": ["command"],
                 },
@@ -374,23 +375,83 @@ class AgentLoop:
         },
         {
             "type": "function",
-            "function": {"name": "files.read", "description": "Read a file.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}}},
+            "function": {
+                "name": "files.read",
+                "description": "Read a scoped text file (optionally by line range).",
+                "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "offset": {"type": "number"}, "limit": {"type": "number"}}, "required": ["path"]},
+            },
         },
         {
             "type": "function",
-            "function": {"name": "files.write", "description": "Write a file.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}}},
+            "function": {
+                "name": "files.write",
+                "description": "Write (or append to) a scoped text file.",
+                "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}, "append": {"type": "boolean"}}, "required": ["path", "content"]},
+            },
         },
         {
             "type": "function",
-            "function": {"name": "files.search", "description": "Search file contents.", "parameters": {"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}}}},
+            "function": {
+                "name": "files.search",
+                "description": "Content-search a scoped dir (ripgrep if available).",
+                "parameters": {"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}, "case_sensitive": {"type": "boolean"}, "glob": {"type": "string"}}, "required": ["pattern"]},
+            },
         },
         {
             "type": "function",
-            "function": {"name": "web.search", "description": "Search the web.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}}},
+            "function": {
+                "name": "web.search",
+                "description": "Query the configured search API endpoint.",
+                "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "max_results": {"type": "number"}}, "required": ["query"]},
+            },
         },
         {
             "type": "function",
-            "function": {"name": "web.extract", "description": "Fetch a URL and extract its text.", "parameters": {"type": "object", "properties": {"url": {"type": "string"}}}},
+            "function": {
+                "name": "web.extract",
+                "description": "Fetch a URL and extract its main text.",
+                "parameters": {"type": "object", "properties": {"url": {"type": "string"}, "selector": {"type": "string"}}, "required": ["url"]},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "memory.update",
+                "description": "Append to or replace text in a bot's memory doc.",
+                "parameters": {"type": "object", "properties": {"target": {"type": "string"}, "operation": {"type": "string"}, "content": {"type": "string"}, "old_content": {"type": "string"}}, "required": ["target", "operation", "content"]},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "memory.search",
+                "description": "Search a bot's memory docs (or prior sessions).",
+                "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "target": {"type": "string"}, "limit": {"type": "number"}}, "required": ["query"]},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "request_approval",
+                "description": "Ask the user to approve an action; pauses until decided.",
+                "parameters": {"type": "object", "properties": {"action": {"type": "string"}, "rationale": {"type": "string"}}, "required": ["action", "rationale"]},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "bus_publish",
+                "description": "Publish a message to the bot message bus (Phase-1 stub).",
+                "parameters": {"type": "object", "properties": {"topic": {"type": "string"}, "payload": {"type": "object"}}, "required": ["topic", "payload"]},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_inbox",
+                "description": "List pending events for a bot (Phase-1 stub).",
+                "parameters": {"type": "object", "properties": {"bot": {"type": "string"}, "limit": {"type": "number"}}},
+            },
         },
     ]
 

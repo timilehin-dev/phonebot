@@ -53,6 +53,22 @@ _BLOCK = re.compile(r"<[^>]+>")
 _WS = re.compile(r"[ \t]+")
 
 
+def _scoped_extract(text: str, selector: str) -> Optional[str]:
+    """Return the text of the element matching ``selector``; None if bs4 is
+    unavailable or the selector matches nothing."""
+    try:
+        from bs4 import BeautifulSoup  # type: ignore
+    except ImportError:
+        return None
+    soup = BeautifulSoup(text, "html.parser")
+    for tag in soup.find_all(list(_NOISE_TAGS)):
+        tag.decompose()
+    node = soup.select_one(selector) if hasattr(soup, "select_one") else None
+    if node is None:
+        return None
+    return re.sub(r"\n{3,}", "\n\n", node.get_text(separator="\n").strip())[:EXTRACT_CHAR_CAP]
+
+
 def _regex_extract(html_text: str) -> str:
     """V1 fallback: strip script/style, blocks, tags, and collapse whitespace."""
     for tag in _NOISE_TAGS:
@@ -143,12 +159,13 @@ class WebTools:
     # ------------------------------------------------------------------ #
     # web.extract
     # ------------------------------------------------------------------ #
-    async def web_extract(self, url: str) -> Dict[str, Any]:
+    async def web_extract(self, url: str, selector: Optional[str] = None) -> Dict[str, Any]:
         """Fetch ``url`` and return its main text.
 
-        Prefers BeautifulSoup; falls back to a regex strip when it is not
-        installed. Non-HTML content types (JSON, plain text) are returned
-        as-is, truncated to the cap.
+        When ``selector`` is supplied and BeautifulSoup is available, the
+        extraction is scoped to the element matching that CSS selector;
+        otherwise the whole main-text extraction is used. Non-HTML content
+        (JSON, plain text) is returned as-is, truncated to the cap.
         """
         if not url.startswith(("http://", "https://")):
             return {"ok": False, "error": f"unsafe URL scheme: {url!r}"}
@@ -160,7 +177,11 @@ class WebTools:
             return {"ok": False, "error": f"fetch failed: {type(exc).__name__}: {exc}"}
         content_type = resp.headers.get("content-type", "")
         if "html" in content_type:
-            text = _try_bs4(resp.text) or _regex_extract(resp.text)
+            scoped = _scoped_extract(resp.text, selector) if selector else None
+            if scoped is not None:
+                text = scoped
+            else:
+                text = _try_bs4(resp.text) or _regex_extract(resp.text)
         else:
             text = resp.text[:EXTRACT_CHAR_CAP]
         return {

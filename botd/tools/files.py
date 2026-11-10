@@ -92,25 +92,54 @@ class FileTools:
     # ------------------------------------------------------------------ #
     # Tool implementations
     # ------------------------------------------------------------------ #
-    async def read_file(self, path: str, bot_name: str) -> Dict[str, Any]:
-        """Read a scoped text file; returns ``{path, content, truncated}``."""
+    async def read_file(
+        self,
+        path: str,
+        bot_name: str,
+        offset: Optional[int] = None,
+        limit: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Read a scoped text file; returns ``{ok, path, content, truncated}``.
+
+        ``offset`` (1-based start line) and ``limit`` (max lines) slice the
+        result when supplied; the byte cap always applies to the raw read.
+        """
         target = self._scoped(path, bot_name)
         if not target.is_file():
             return {"ok": False, "error": f"not a file: {target}"}
         data = target.read_bytes()
         cap = self.READ_CAP_BYTES
+        truncated = len(data) > cap
+        lines = data[:cap].decode("utf-8", "replace").splitlines()
+        if offset is not None or limit is not None:
+            start = max(0, int(offset or 1) - 1)
+            end = start + int(limit) if limit is not None else len(lines)
+            lines = lines[start:end]
         return {
             "ok": True,
             "path": str(target),
-            "content": data[:cap].decode("utf-8", "replace"),
-            "truncated": len(data) > cap,
+            "content": "\n".join(lines),
+            "truncated": truncated,
         }
 
-    async def write_file(self, path: str, content: str, bot_name: str) -> Dict[str, Any]:
-        """Write a scoped text file (parents created atomically)."""
+    async def write_file(
+        self,
+        path: str,
+        content: str,
+        bot_name: str,
+        append: bool = False,
+    ) -> Dict[str, Any]:
+        """Write a scoped text file (parents created atomically).
+
+        ``append`` writes in append mode instead of clobbering.
+        """
         async with self._write_lock:
             target = self._scoped(path, bot_name)
             target.parent.mkdir(parents=True, exist_ok=True)
+            if append:
+                with target.open("a", encoding="utf-8") as fh:
+                    fh.write(content)
+                return {"ok": True, "path": str(target), "bytes": len(content.encode("utf-8")), "appended": True}
             tmp = target.with_suffix(target.suffix + ".tmp")
             tmp.write_text(content, encoding="utf-8")
             tmp.replace(target)
@@ -122,26 +151,33 @@ class FileTools:
         path: Optional[str] = None,
         bot_name: str = "",
         limit: int = 50,
+        case_sensitive: bool = False,
+        glob: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Content-search a scoped dir. Prefers ripgrep, else Python walk.
 
-        Returns ``{matches: [{path, line, text}], truncated}``.
+        ``case_sensitive`` toggles match direction; ``glob`` (an fnmatch glob)
+        restricts which files are scanned. Returns ``{matches, truncated}``.
         """
         root = self._scoped(path or str(self._home / "bots" / bot_name), bot_name)
-        regex = re.compile(re.escape(pattern))
+        flags = 0 if case_sensitive else re.IGNORECASE
+        regex = re.compile(re.escape(pattern), flags)
         matches: List[Dict[str, Any]] = []
         truncated = False
 
         if self._rg is not None:
-            # ripgrep is dramatically faster on large trees; cap matches.
+            rg_args = ["--line-number", "-E", pattern, str(root)]
+            if not case_sensitive:
+                rg_args.append("-i")
+            if glob:
+                rg_args.extend(["-g", glob])
             proc = await asyncio.create_subprocess_exec(
-                self._rg, "--line-number", "-E", pattern, str(root),
+                self._rg, *rg_args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
             out, _ = await proc.communicate()
             for line in out.decode("utf-8", "replace").splitlines()[:limit]:
-                # rg format: path:line:content
                 parts = line.split(":", 2)
                 if len(parts) == 3:
                     matches.append({"path": parts[0], "line": parts[1], "text": parts[2]})
@@ -149,12 +185,15 @@ class FileTools:
             return {"ok": True, "matches": matches, "truncated": truncated, "backend": "rg"}
 
         # Pure-Python fallback.
+        import fnmatch
         cap_files = 5000
         for dirpath, _dirnames, filenames in os.walk(root):
             if len(matches) >= limit:
                 truncated = True
                 break
             for name in filenames:
+                if glob and not fnmatch.fnmatch(name, glob):
+                    continue
                 if len(matches) >= limit:
                     truncated = True
                     break

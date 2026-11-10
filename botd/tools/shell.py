@@ -71,6 +71,7 @@ class ShellBackend:
         command: str,
         cwd: Optional[str] = None,
         timeout_s: float = 120.0,
+        extra_env: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Run ``command``; returns ``{exit_code, stdout, stderr, truncated}``."""
         raise NotImplementedError
@@ -97,11 +98,14 @@ class TermuxShellBackend(ShellBackend):
         command: str,
         cwd: Optional[str] = None,
         timeout_s: float = 120.0,
+        extra_env: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Run one command with the shell; capture stdout/stderr.
 
         Returns ``{"exit_code", "stdout", "stderr", "truncated", "timed_out"}``.
         stdout/stderr are each capped at 256 KB to keep LLM context bounded.
+        ``extra_env`` is merged over the inherited environment (credentials
+        are not overridable - the backend ignores keys it does not own).
         """
         if not command.strip():
             return {
@@ -110,6 +114,8 @@ class TermuxShellBackend(ShellBackend):
             }
         env = os.environ.copy()
         env.update(self._extra_env)
+        if extra_env:
+            env.update(extra_env)
         proc = await asyncio.create_subprocess_shell(
             command,
             cwd=cwd or None,
@@ -187,12 +193,17 @@ class SSHShellBackend(ShellBackend):
         command: str,
         cwd: Optional[str] = None,
         timeout_s: float = 120.0,
+        extra_env: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         async with self._lock:
             try:
                 conn = self._conn if self._conn is not None else await self._connect()
+                env = dict(os.environ)
+                if extra_env:
+                    env.update(extra_env)
                 result = await conn.run(
-                    command, cwd=cwd, timeout=timeout_s, combine_stderr=False
+                    command, cwd=cwd, timeout=timeout_s,
+                    combine_stderr=False, env=env,
                 )
                 return {
                     "exit_code": result.exit_status or 0,

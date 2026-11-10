@@ -129,6 +129,7 @@ class ToolRegistry:
         shell_backend: Optional[Any] = None,
         file_tools: Optional[Any] = None,
         web_tools: Optional[Any] = None,
+        memory_tools: Optional[Any] = None,
     ) -> None:
         self.config = config
         self.ipc = ipc
@@ -141,6 +142,7 @@ class ToolRegistry:
         self._shell = shell_backend
         self._files = file_tools
         self._web = web_tools
+        self._memory = memory_tools
         self.register_defaults()
 
     # ------------------------------------------------------------------ #
@@ -164,11 +166,31 @@ class ToolRegistry:
         """
         self._risk_rules.append((tool_pattern, predicate, level))
 
+    # Contract risk name -> registry RiskLevel. The contract (schema of
+    # record) uses {read, write, costly, destructive, privileged}; the
+    # registry orders them low < medium < high < destructive.
+    _RISK_FROM_CONTRACT = {
+        "read": LOW,
+        "write": MEDIUM,
+        "costly": HIGH,
+        "privileged": HIGH,
+        "destructive": DESTRUCTIVE,
+    }
+
+    def _risk(self, contract_risk: str) -> RiskLevel:
+        return self._RISK_FROM_CONTRACT.get(contract_risk, MEDIUM)
+
     def register_defaults(self) -> None:
-        """Register the built-in shell/files/web tools + dangerous-cmd rules."""
+        """Register the built-in tools, aligned to
+        ``contracts/builtin-tools-phase1.json`` (the schema of record).
+
+        Arg names here MUST stay in sync with the contract; the
+        ``test/protocol_conformance.py`` check fails hard on any drift.
+        """
         from .shell import contains_dangerous_command, build_shell_backend
         from .files import FileTools
         from .web import WebTools
+        from .memory import MemoryTools
 
         if self._shell is None:
             self._shell = build_shell_backend(self.config)
@@ -176,7 +198,10 @@ class ToolRegistry:
             self._files = FileTools(self.config)
         if self._web is None:
             self._web = WebTools(self.config)
+        if self._memory is None:
+            self._memory = MemoryTools(self.config, state_resolver=self._state_resolver())
 
+        # --- shell.run -------------------------------------------------------
         self.register(
             ToolDescriptor(
                 id="shell.run",
@@ -184,113 +209,335 @@ class ToolRegistry:
                 parameters={
                     "type": "object",
                     "properties": {
-                        "command": {"type": "string"},
+                        "command": {"type": "string", "description": "Command line to execute."},
                         "cwd": {"type": "string"},
-                        "timeout_s": {"type": "number"},
+                        "env": {"type": "object", "description": "Extra env vars (credential vars ignored)."},
+                        "timeout_ms": {"type": "number"},
                     },
                     "required": ["command"],
                 },
-                risk=MEDIUM,
+                risk=self._risk("write"),
                 backend="shell",
             ),
             self._h_shell_run,
         )
+        # --- files.read ------------------------------------------------------
         self.register(
             ToolDescriptor(
                 id="files.read",
-                description="Read a file (scoped to allowed roots).",
-                parameters={"type": "object", "properties": {"path": {"type": "string"}}},
-                risk=LOW,
+                description="Read a scoped text file (optionally by line range).",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string"},
+                        "offset": {"type": "number"},
+                        "limit": {"type": "number"},
+                    },
+                    "required": ["path"],
+                },
+                risk=self._risk("read"),
                 backend="files",
             ),
             self._h_files_read,
         )
+        # --- files.write -----------------------------------------------------
         self.register(
             ToolDescriptor(
                 id="files.write",
-                description="Write a file (scoped to allowed roots).",
+                description="Write (or append to) a scoped text file.",
                 parameters={
                     "type": "object",
-                    "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
+                    "properties": {
+                        "path": {"type": "string"},
+                        "content": {"type": "string"},
+                        "append": {"type": "boolean"},
+                    },
                     "required": ["path", "content"],
                 },
-                risk=MEDIUM,
+                risk=self._risk("write"),
                 backend="files",
             ),
             self._h_files_write,
         )
+        # --- files.search ----------------------------------------------------
         self.register(
             ToolDescriptor(
                 id="files.search",
-                description="Search file contents (ripgrep if available, else Python).",
+                description="Content-search a scoped dir (ripgrep if available).",
                 parameters={
                     "type": "object",
-                    "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}},
+                    "properties": {
+                        "pattern": {"type": "string"},
+                        "path": {"type": "string"},
+                        "case_sensitive": {"type": "boolean"},
+                        "glob": {"type": "string"},
+                    },
                     "required": ["pattern"],
                 },
-                risk=LOW,
+                risk=self._risk("read"),
                 backend="files",
             ),
             self._h_files_search,
         )
+        # --- web.search ------------------------------------------------------
         self.register(
             ToolDescriptor(
                 id="web.search",
-                description="Query the configured search API.",
-                parameters={"type": "object", "properties": {"query": {"type": "string"}}},
-                risk=MEDIUM,
+                description="Query the configured search API endpoint.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "max_results": {"type": "number"},
+                    },
+                    "required": ["query"],
+                },
+                risk=self._risk("read"),
                 backend="web",
             ),
             self._h_web_search,
         )
+        # --- web.extract -----------------------------------------------------
         self.register(
             ToolDescriptor(
                 id="web.extract",
                 description="Fetch a URL and extract its main text.",
-                parameters={"type": "object", "properties": {"url": {"type": "string"}}},
-                risk=MEDIUM,
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string"},
+                        "selector": {"type": "string"},
+                    },
+                    "required": ["url"],
+                },
+                risk=self._risk("read"),
                 backend="web",
             ),
             self._h_web_extract,
         )
+        # --- memory.update ---------------------------------------------------
+        self.register(
+            ToolDescriptor(
+                id="memory.update",
+                description="Append to or replace text in a bot's memory doc.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "target": {"type": "string", "description": "user.md | memory.md | soul.md"},
+                        "operation": {"type": "string", "description": "append | replace"},
+                        "content": {"type": "string"},
+                        "old_content": {"type": "string"},
+                    },
+                    "required": ["target", "operation", "content"],
+                },
+                risk=self._risk("write"),
+                backend="memory",
+            ),
+            self._h_memory_update,
+        )
+        # --- memory.search ---------------------------------------------------
+        self.register(
+            ToolDescriptor(
+                id="memory.search",
+                description="Search a bot's memory docs (or prior sessions).",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "target": {"type": "string"},
+                        "limit": {"type": "number"},
+                    },
+                    "required": ["query"],
+                },
+                risk=self._risk("read"),
+                backend="memory",
+            ),
+            self._h_memory_search,
+        )
+        # --- request_approval ------------------------------------------------
+        self.register(
+            ToolDescriptor(
+                id="request_approval",
+                description="Ask the user to approve an action; pauses until decided.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string"},
+                        "rationale": {"type": "string"},
+                    },
+                    "required": ["action", "rationale"],
+                },
+                risk=self._risk("privileged"),
+                backend="direct",
+            ),
+            self._h_request_approval,
+        )
+        # --- bus_publish -----------------------------------------------------
+        self.register(
+            ToolDescriptor(
+                id="bus_publish",
+                description="Publish a message to the bot message bus (Phase-1 stub).",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "topic": {"type": "string"},
+                        "payload": {"type": "object"},
+                    },
+                    "required": ["topic", "payload"],
+                },
+                risk=self._risk("write"),
+                backend="direct",
+            ),
+            self._h_bus_publish,
+        )
+        # --- list_inbox ------------------------------------------------------
+        self.register(
+            ToolDescriptor(
+                id="list_inbox",
+                description="List pending events for a bot (Phase-1 stub).",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "bot": {"type": "string"},
+                        "limit": {"type": "number"},
+                    },
+                },
+                risk=self._risk("read"),
+                backend="direct",
+            ),
+            self._h_list_inbox,
+        )
 
-        # A shell command matching a destructive pattern escalates to
-        # destructive risk (always approval).
+        # Risk-escalation rules.
+        # A shell command matching a destructive pattern -> destructive.
         self.add_risk_rule(
             "shell.run",
             lambda args: contains_dangerous_command(str(args.get("command", ""))) is not None,
             DESTRUCTIVE,
         )
+        # request_approval is intrinsically privileged: fail-closed when no
+        # app channel is connected.
+        self.add_risk_rule("request_approval", lambda _args: True, DESTRUCTIVE)
+
+    # ------------------------------------------------------------------ #
+    # State resolver hook (memory backend session search)
+    # ------------------------------------------------------------------ #
+    def _state_resolver(self):
+        """Return a ``bot_name -> BotState`` resolver, or None (Phase 1).
+
+        The daemon can inject one so ``memory.search`` can reach session FTS.
+        """
+        return getattr(self, "_state_resolver_override", None)
 
     # ------------------------------------------------------------------ #
     # Handler bodies (thin; delegate to the backends)
     # ------------------------------------------------------------------ #
     async def _h_shell_run(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
-        timeout_s = float(args.get("timeout_s") or 120.0)
-        result = await self._shell.run(
-            str(args.get("command", "")), cwd=args.get("cwd"), timeout_s=timeout_s
+        # Contract uses timeout_ms; the backend takes seconds.
+        timeout_ms = args.get("timeout_ms")
+        timeout_s = float(timeout_ms) / 1000.0 if timeout_ms else 120.0
+        return await self._shell.run(
+            str(args.get("command", "")),
+            cwd=args.get("cwd"),
+            timeout_s=timeout_s,
+            extra_env=args.get("env"),
         )
-        return result
 
     async def _h_files_read(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
-        return await self._files.read_file(str(args.get("path", "")), ctx.bot_name)
+        return await self._files.read_file(
+            str(args.get("path", "")),
+            ctx.bot_name,
+            offset=args.get("offset"),
+            limit=args.get("limit"),
+        )
 
     async def _h_files_write(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
         return await self._files.write_file(
-            str(args.get("path", "")), str(args.get("content", "")), ctx.bot_name
+            str(args.get("path", "")),
+            str(args.get("content", "")),
+            ctx.bot_name,
+            append=bool(args.get("append", False)),
         )
 
     async def _h_files_search(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
         return await self._files.search_files(
-            str(args.get("pattern", "")), args.get("path"), ctx.bot_name,
-            limit=int(args.get("limit", 50)),
+            str(args.get("pattern", "")),
+            args.get("path"),
+            ctx.bot_name,
+            case_sensitive=bool(args.get("case_sensitive", False)),
+            glob=args.get("glob"),
         )
 
     async def _h_web_search(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
-        return await self._web.web_search(str(args.get("query", "")))
+        return await self._web.web_search(
+            str(args.get("query", "")), int(args.get("max_results", 5))
+        )
 
     async def _h_web_extract(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
-        return await self._web.web_extract(str(args.get("url", "")))
+        return await self._web.web_extract(str(args.get("url", "")), args.get("selector"))
+
+    async def _h_memory_update(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
+        return await self._memory.update_doc(
+            ctx.bot_name,
+            str(args.get("target", "")),
+            str(args.get("operation", "append")),
+            str(args.get("content", "")),
+            old_content=args.get("old_content"),
+        )
+
+    async def _h_memory_search(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
+        target = args.get("target")
+        if target == "sessions":
+            return await self._memory.search_sessions(
+                ctx.bot_name, str(args.get("query", "")), limit=int(args.get("limit", 10))
+            )
+        return await self._memory.search_docs(
+            ctx.bot_name,
+            str(args.get("query", "")),
+            target=target,
+            limit=int(args.get("limit", 10)),
+        )
+
+    async def _h_request_approval(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
+        """Route an approval request through the bus + IPC.
+
+        Always approved-then-denied when no app channel is connected
+        (fail-closed). The registry's risk gate already paused the call;
+        this handler surfaces the decision to the bot.
+        """
+        corr_id = f"appr-{uuid.uuid4().hex[:12]}"
+        detail = {
+            "tool": "request_approval",
+            "action": args.get("action"),
+            "rationale": args.get("rationale"),
+            "bot": ctx.bot_name,
+        }
+        if self.bus is not None:
+            self.bus.post(ctx.bot_name, "*", "needs-approval",
+                         {"corr_id": corr_id, **detail}, corr_id=corr_id, priority="urgent")
+        if self.ipc is None or not self.ipc.client_connected:
+            return {"ok": False, "approved": False, "reason": "no app channel; fail-closed"}
+        approved = await self.ipc.request_approval(corr_id, detail)
+        return {"ok": True, "approved": approved, "corr_id": corr_id}
+
+    async def _h_bus_publish(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
+        """Phase-1 stub: enqueue a durable fyi event on the bus."""
+        topic = str(args.get("topic", ""))
+        payload = args.get("payload", {})
+        if self.bus is None:
+            return {"ok": False, "stub": True, "error": "bus not wired; Phase 2"}
+        self.bus.post(ctx.bot_name, topic, "fyi", payload, priority="fyi")
+        return {"ok": True, "topic": topic, "delivered": True}
+
+    async def _h_list_inbox(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
+        """Phase-1: read (without consuming) the durable wakeup journal for a bot."""
+        bot = args.get("bot") or ctx.bot_name
+        limit = int(args.get("limit", 20))
+        resolver = self._state_resolver()
+        if resolver is None:
+            return {"ok": False, "stub": True, "error": "state resolver not wired; Phase 2"}
+        events = resolver(bot).list_wakeup(limit=limit)
+        return {"ok": True, "bot": bot, "events": events}
 
     # ------------------------------------------------------------------ #
     # Risk evaluation
@@ -405,7 +652,7 @@ class ToolRegistry:
 
     async def close(self) -> None:
         """Release backend resources (httpx client, ssh connections)."""
-        for backend in (self._shell, self._files, self._web):
+        for backend in (self._shell, self._files, self._web, self._memory):
             closer = getattr(backend, "close", None)
             if closer is not None:
                 try:
