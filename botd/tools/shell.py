@@ -26,18 +26,28 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..config import Config, BackendConfig
 
 
-#: (pattern, human note). A command matching ANY pattern is "dangerous".
+#: (pattern, human note). A command matching ANY pattern is "dangerous" and
+#: gets escalated to the ``destructive`` risk tier (approval required).
+#:
+#: Design choice: these patterns deliberately *over-escalate* rather than
+#: under-escalate. Catching a harmless ``rm -r build/`` costs one approval
+#: prompt; missing ``rm -rf ~`` costs the user's home. So any ``rm`` that
+#: carries a recursive or force flag is flagged, regardless of target.
 DANGEROUS_COMMAND_PATTERNS: List[Tuple[str, str]] = [
-    (r"\brm\s+(-[a-zA-Z]*[rf][a-zA-Z]*\s+)+(/|~|\$HOME)\b", "rm -rf of home/root"),
-    (r"\brm\s+-[a-zA-Z]*r[a-zA-Z]*\s+-[a-zA-Z]*f", "rm -fr"),
+    # rm carrying a recursive/force flag, whether it is the first flag right
+    # after ``rm`` or a later split flag. Covers ``-rf``, ``-R``, ``-rfi``,
+    # ``--force``, ``--recursive`` and the split forms ``-i -r`` / ``-i -f``.
+    # Benign dashed *filenames* (``rm foo-bar.txt``) do NOT match: a match
+    # requires a leading dash (``-{1,2}``) on a flag token.
+    (r"\brm\s+-{1,2}[A-Za-z]*[RrFf]", "rm with a recursive/force flag"),
+    (r"\brm\s+\S+\s+-{1,2}[A-Za-z]*[RrFf]", "rm with a later recursive/force flag"),
     (r"\bdd\s+if=", "dd raw write"),
     (r"\bmkfs(\.\w+)?\b", "mkfs format"),
     (r"\bshred\b", "shred destroy"),
     (r"\bparted\b.*\bmkpart\b", "parted create partition"),
-    (r">\s*/dev/(sd|mmcblk|nvme|md)\\w*", "direct block device write"),
+    (r">\s*/dev/(sd|mmcblk|nvme|md)\w*", "direct block device write"),
     (r"\bchmod\s+-R\s+777\s+/", "chmod -R 777 /"),
-    (r"\bshutdown\b|\breboot\b|\bpoweroff\b", "power control"),
-    (r"\bshutdown\b|\breboot\b", "reboot/shutdown"),
+    (r"\b(shutdown|reboot|poweroff)\b", "power control"),
 ]
 
 _DANGEROUS_COMPILED = [(re.compile(p), note) for p, note in DANGEROUS_COMMAND_PATTERNS]

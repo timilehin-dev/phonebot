@@ -181,7 +181,15 @@ class ToolRegistry:
             ToolDescriptor(
                 id="shell.run",
                 description="Run a shell command in the configured backend.",
-                parameters={"type": "object", "properties": {"cmd": {"type": "string"}}},
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "command": {"type": "string"},
+                        "cwd": {"type": "string"},
+                        "timeout_s": {"type": "number"},
+                    },
+                    "required": ["command"],
+                },
                 risk=MEDIUM,
                 backend="shell",
             ),
@@ -250,7 +258,7 @@ class ToolRegistry:
         # destructive risk (always approval).
         self.add_risk_rule(
             "shell.run",
-            lambda args: contains_dangerous_command(str(args.get("cmd", ""))) is not None,
+            lambda args: contains_dangerous_command(str(args.get("command", ""))) is not None,
             DESTRUCTIVE,
         )
 
@@ -258,7 +266,11 @@ class ToolRegistry:
     # Handler bodies (thin; delegate to the backends)
     # ------------------------------------------------------------------ #
     async def _h_shell_run(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
-        return await self._shell.run(str(args.get("cmd", "")), cwd=args.get("cwd"))
+        timeout_s = float(args.get("timeout_s") or 120.0)
+        result = await self._shell.run(
+            str(args.get("command", "")), cwd=args.get("cwd"), timeout_s=timeout_s
+        )
+        return result
 
     async def _h_files_read(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
         return await self._files.read_file(str(args.get("path", "")), ctx.bot_name)

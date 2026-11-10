@@ -361,7 +361,15 @@ class AgentLoop:
             "function": {
                 "name": "shell.run",
                 "description": "Run a shell command in the configured backend.",
-                "parameters": {"type": "object", "properties": {"cmd": {"type": "string"}}},
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "command": {"type": "string"},
+                        "cwd": {"type": "string"},
+                        "timeout_s": {"type": "number"},
+                    },
+                    "required": ["command"],
+                },
             },
         },
         {

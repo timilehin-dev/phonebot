@@ -154,6 +154,9 @@ class IpcServer:
         #: True when a direct endpoint.json LLM call should be attempted
         #: instead of waiting for the app.
         self._direct_fallback = True
+        #: Cached LLM backend (built lazily on first use, kept across calls).
+        self._llm_backend: Optional[Any] = None
+        self._llm_meta: Dict[str, Any] = {}
 
     # ------------------------------------------------------------------ #
     # Endpoint resolution (fallback LLM path)
@@ -509,43 +512,23 @@ class IpcServer:
         * ``auto``   - real HTTP when a key resolves, else offline fallback so a
           fresh device with no key never hard-fails.
 
-        The key is never logged; only the non-secret endpoint fields are kept
-        for traceability.
+        The backend is built once and cached (``self._llm_backend``) so the
+        httpx client / connection is not re-created on every call. The key is
+        never logged; only non-secret backend metadata is attached to the
+        result for observability.
         """
         from .llm import build_backend
 
-        backend, meta = build_backend(self.config, home_path=self.config.home_path)
-        result = await backend.complete(model, messages, tools)
+        if self._llm_backend is None:
+            self._llm_backend, self._llm_meta = build_backend(
+                self.config, home_path=self.config.home_path
+            )
+        result = await self._llm_backend.complete(model, messages, tools)
         # Keep the API key out of any trace/context; record only non-secret
         # backend metadata for observability.
-        result["_llm_backend"] = meta.get("backend")
-        result["_llm_model"] = meta.get("model")
+        result["_llm_backend"] = self._llm_meta.get("backend")
+        result["_llm_model"] = self._llm_meta.get("model")
         return result
-
-    @staticmethod
-    def _placeholder_completion(
-        model: str,
-        messages: List[Dict[str, Any]],
-        tools: Optional[List[Dict[str, Any]]],
-        endpoint: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        """Stub completion; Phase 1 swaps in a real httpx call.
-
-        Produces a structurally-correct response (no tool calls, a minimal
-        echo) so the agent loop can be exercised end-to-end before real LLM
-        integration lands.
-        """
-        last_user = next(
-            (m["content"] for m in reversed(messages) if m.get("role") == "user"),
-            "",
-        )
-        return {
-            "content": f"[botd skeleton: LLM not wired; saw {len(messages)} msgs] {str(last_user)[:80]}",
-            "tool_calls": [],
-            "finish_reason": "stop",
-            "usage": {"prompt_tokens": 0, "completion_tokens": 0},
-            "_endpoint": {k: v for k, v in endpoint.items() if k != "api_key"},
-        }
 
     # ------------------------------------------------------------------ #
     # Approval registry (used by the tool dispatcher)
