@@ -153,6 +153,16 @@ def _sign(dist: Path, artifacts: List[Dict[str, Any]], manifest: Dict[str, Any])
     if shutil.which("gpg") is None:
         print("  [sign] gpg not found; skipping (artifacts left unsigned)")
         return
+    keys = subprocess.run(
+        ["gpg", "--list-secret-keys", "--fingerprint", "--with-subkeys"],
+        capture_output=True, text=True, check=False,
+    )
+    # CI images ship gpg without a secret key. Signing is optional (the
+    # manifest records "fingerprint": null), so skip instead of failing the
+    # whole release when there is nothing to sign with.
+    if keys.returncode != 0 or not keys.stdout.strip():
+        print("  [sign] no GPG secret key configured; skipping (artifacts left unsigned)")
+        return
     for a in artifacts:
         target = dist / a["file"]
         subprocess.run(
@@ -161,20 +171,13 @@ def _sign(dist: Path, artifacts: List[Dict[str, Any]], manifest: Dict[str, Any])
             check=True,
         )
         print(f"  [sign] signed {a['file']}")
-    # Try to discover the active key's fingerprint.
-    try:
-        out = subprocess.run(
-            ["gpg", "--list-secret-keys", "--fingerprint", "--with-subkeys"],
-            capture_output=True, text=True, check=False,
-        )
-        for line in out.stdout.splitlines():
-            if line.strip().startswith("fingerprint") or len(line.strip()) == 40:
-                fp = line.replace("fingerprint", "").strip()
-                if len(fp) == 40:
-                    manifest["signing"]["fingerprint"] = fp
-                    break
-    except subprocess.SubprocessError:
-        pass
+    # Record the active key's fingerprint from the listing we already have.
+    for line in keys.stdout.splitlines():
+        if line.strip().startswith("fingerprint") or len(line.strip()) == 40:
+            fp = line.replace("fingerprint", "").strip()
+            if len(fp) == 40:
+                manifest["signing"]["fingerprint"] = fp
+                break
 
 
 def main() -> int:
