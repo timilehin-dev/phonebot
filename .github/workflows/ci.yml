@@ -1,0 +1,47 @@
+# CI gate: runs the Python-side test suite on a Linux runner.
+#
+# These checks are platform-independent and need NO Android SDK:
+#   - protocol conformance (contract == registry == LLM schemas)
+#   - tool dispatch to a real subprocess
+#   - mock OpenAI plumbing (auth/payload/normalisation)
+#   - botd selftest + offline smoketest
+#
+# The Android APK build is NOT done here (that's release.yml / Android Studio).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install botd deps
+        run: pip install -r botd/requirements.txt
+
+      - name: Selftest (botd)
+        run: python -m botd.main --selftest
+
+      - name: Protocol conformance
+        run: python test/protocol_conformance.py
+
+      - name: Tool dispatch (real subprocess)
+        run: python test/tools_dispatch_check.py
+
+      - name: Mock OpenAI plumbing
+        run: python test/mock_openai_check.py
+
+      - name: Offline LLM smoketest
+        run: python -m botd.main --smoketest-llm --llm-mode fake
