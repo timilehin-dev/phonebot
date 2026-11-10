@@ -2,8 +2,10 @@
 # a GitHub Release with all assets.
 #
 # Triggers:
-#   - tag: v*          (e.g. v0.1.0 → version 0.1.0)
-#   - manual dispatch  (draft, non-released)
+#   - tag: v*             (e.g. v0.1.0 → version 0.1.0)
+#   - branch: release/v*  (publishes v<X.Y.Z> from the branch head; used when
+#                          the tag itself cannot be pushed to the remote)
+#   - manual dispatch     (draft, non-released)
 #
 # Signing:
 #   Provide the keystore via repo secrets:
@@ -20,6 +22,7 @@ name: release
 on:
   push:
     tags: ["v*"]
+    branches: ["release/v*"]
   workflow_dispatch:
     inputs:
       version:
@@ -44,7 +47,7 @@ jobs:
     # newly-introduced on:push workflow once on the adding commit even when
     # the tag filter would not match — the guard makes that no-op a clean
     # skip instead of a failed plan.
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/v')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -111,10 +114,13 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip >/dev/null
           VERSION="${{ github.event.inputs.version || '' }}"
-          if [ -z "$VERSION" ] && [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            # Strip the leading v using bash parameter expansion (GITHUB_REF_NAME is
-            # "v0.1.0" -> "0.1.0"). Note this is plain bash, not a workflow expression.
-            VERSION="${GITHUB_REF_NAME#v}"
+          if [ -z "$VERSION" ]; then
+            # Plain bash parameter expansion (not a workflow expression):
+            # refs/tags/v0.1.0 -> 0.1.0; release/v0.1.0 -> 0.1.0.
+            case "$GITHUB_REF" in
+              refs/tags/v*) VERSION="${GITHUB_REF_NAME#v}" ;;
+              refs/heads/release/v*) VERSION="${GITHUB_REF_NAME#release/v}" ;;
+            esac
           fi
           [ -z "$VERSION" ] && VERSION="0.0.0-dev"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -132,7 +138,7 @@ jobs:
     needs: build
     # Publish only on a tag push, or on manual dispatch when the build was
     # signed (an unsigned dispatch should not ship a public release).
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && needs.build.outputs.signed == 'true')
+    if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/v') || (github.event_name == 'workflow_dispatch' && needs.build.outputs.signed == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
