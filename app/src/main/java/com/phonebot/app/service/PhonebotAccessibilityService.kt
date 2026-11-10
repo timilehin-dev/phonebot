@@ -25,18 +25,18 @@ class PhonebotAccessibilityService : AccessibilityService() {
         sealed interface AccessibilityServiceServiceAction {
             data class Tap(val x: Float, val y: Float) : AccessibilityServiceServiceAction
             data class Swipe(val from: Pair<Float, Float>, val to: Pair<Float, Float>) : AccessibilityServiceServiceAction
-            data class Back : AccessibilityServiceServiceAction
+            object Back : AccessibilityServiceServiceAction
         }
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        serviceInfo = AccessibilityServiceInfo(serviceInfo).apply {
+        serviceInfo = (serviceInfo ?: AccessibilityServiceInfo()).apply {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
                     AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-            flags = AccessibilityServiceInfo.FLAG_DEFAULT_NOTIFICATION or
-                    AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+            // There is no FLAG_DEFAULT_NOTIFICATION; report view ids only.
+            flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
         }
         Log.i(TAG, "assist backend online")
     }

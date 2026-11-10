@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -64,8 +65,8 @@ fun ObservatoryScreen(onBotSelected: (botId: String) -> Unit) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = t.Density.ScreenPad.dp),
-        verticalArrangement = Arrangement.spacedBy(t.Density.CardGap.dp),
+            .padding(horizontal = DesignTokens.Density.ScreenPad.dp),
+        verticalArrangement = Arrangement.spacedBy(DesignTokens.Density.CardGap.dp),
     ) {
         // Band 1: digest strip.
         item {
@@ -84,9 +85,6 @@ fun ObservatoryScreen(onBotSelected: (botId: String) -> Unit) {
                 ObservatoryFilter.Working -> placeholderCrew.filter { it.statusLabel == "working" }
                 ObservatoryFilter.Waiting -> placeholderCrew.filter { it.statusLabel == "waiting" }
                 ObservatoryFilter.Approval -> placeholderCrew.filter { it.approvalBadge != null }
-            }
-            visible.chunked(2).forEach { row in visible.chunked(2) ->
-                // each row laid out below via Row
             }
             CrewGrid(visible, onBotSelected)
         }
@@ -107,14 +105,14 @@ fun ObservatoryScreen(onBotSelected: (botId: String) -> Unit) {
 private fun DigestStrip() {
     val t = DesignTokens
     Surface(
-        shape = RoundedCornerShape(t.Shape.CardRadius),
-        color = t.Surfaces.Surface,
-        contentColor = t.Chrome.Text,
+        shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
+        color = DesignTokens.Surfaces.Surface,
+        contentColor = DesignTokens.Chrome.Text,
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Fleet", style = MaterialTheme.typography.labelSmall, color = t.Chrome.TextFaint)
-            DigestLine("3 bots online · 1 waiting on you", t.Status.Waiting)
-            DigestLine("14 runs last hour · 0 failed", t.Status.Ok)
+            Text("Fleet", style = MaterialTheme.typography.labelSmall, color = DesignTokens.Chrome.TextFaint)
+            DigestLine("3 bots online · 1 waiting on you", DesignTokens.Status.Waiting)
+            DigestLine("14 runs last hour · 0 failed", DesignTokens.Status.Ok)
             // TODO: digest figures come from the botd /digest RPC (Phase 2).
         }
     }
@@ -130,7 +128,7 @@ private fun DigestLine(text: String, accent: Color) {
                 .background(accent, CircleShape),
         )
         Spacer(Modifier.width(8.dp))
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = t.Chrome.TextSecondary)
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = DesignTokens.Chrome.TextSecondary)
     }
 }
 
@@ -152,9 +150,9 @@ private fun FilterChipRow(selected: ObservatoryFilter, onSelect: (ObservatoryFil
         ObservatoryFilter.entries.forEach { f ->
             val isSel = f == selected
             Surface(
-                shape = RoundedCornerShape(t.Shape.ChipRadius),
-                color = if (isSel) t.Surfaces.SurfaceHigh else t.Surfaces.SurfaceContainer,
-                contentColor = if (isSel) t.Chrome.Text else t.Chrome.TextSecondary,
+                shape = RoundedCornerShape(DesignTokens.Shape.ChipRadius),
+                color = if (isSel) DesignTokens.Surfaces.SurfaceHigh else DesignTokens.Surfaces.SurfaceContainer,
+                contentColor = if (isSel) DesignTokens.Chrome.Text else DesignTokens.Chrome.TextSecondary,
             ) {
                 Text(
                     text = " ${f.label} ",
@@ -193,9 +191,9 @@ private val placeholderCrew = listOf(
 @Composable
 private fun CrewGrid(members: List<CrewMember>, onBotSelected: (String) -> Unit) {
     val t = DesignTokens
-    Column(verticalArrangement = Arrangement.spacedBy(t.Density.CardGap.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(DesignTokens.Density.CardGap.dp)) {
         members.chunked(2).forEach { pair ->
-            Row(horizontalArrangement = Arrangement.spacedBy(t.Density.CardGap.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(DesignTokens.Density.CardGap.dp)) {
                 pair.forEach { m ->
                     BotCard(m, Modifier.weight(1f), onBotSelected = { onBotSelected(m.id) })
                 }
@@ -213,7 +211,7 @@ private fun CrewGrid(members: List<CrewMember>, onBotSelected: (String) -> Unit)
  *  - approval badge chip when a request is pending
  */
 @Composable
-fun BotCard(
+private fun BotCard(
     bot: CrewMember,
     modifier: Modifier = Modifier,
     onBotSelected: (String) -> Unit,
@@ -221,9 +219,9 @@ fun BotCard(
     val t = DesignTokens
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(t.Shape.CardRadius),
-        color = t.Surfaces.Surface,
-        contentColor = t.Chrome.Text,
+        shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
+        color = DesignTokens.Surfaces.Surface,
+        contentColor = DesignTokens.Chrome.Text,
         onClick = { onBotSelected(bot.id) },
         enabled = true,
     ) {
@@ -236,7 +234,7 @@ fun BotCard(
                     Text(
                         bot.activity,
                         style = MaterialTheme.typography.bodySmall,
-                        color = t.Chrome.TextSecondary,
+                        color = DesignTokens.Chrome.TextSecondary,
                         maxLines = 1,
                     )
                 }
@@ -245,14 +243,14 @@ fun BotCard(
             }
             if (bot.approvalBadge != null) {
                 Surface(
-                    shape = RoundedCornerShape(t.Shape.BlockRadius),
-                    color = t.Status.Critical.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(DesignTokens.Shape.BlockRadius),
+                    color = DesignTokens.Status.Critical.copy(alpha = 0.15f),
                 ) {
                     Text(
                         text = " ✋ ${bot.approvalBadge} ",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        color = t.Status.Critical,
+                        color = DesignTokens.Status.Critical,
                     )
                 }
             }
@@ -268,7 +266,7 @@ private fun AvatarRing(initial: String, hue: Color) {
             Modifier
                 .size(40.dp)
                 .border(width = 2.dp, color = hue, shape = CircleShape)
-                .background(t.Surfaces.SurfaceContainer, CircleShape),
+                .background(DesignTokens.Surfaces.SurfaceContainer, CircleShape),
         )
         Text(initial, style = MaterialTheme.typography.titleMedium, color = hue, fontWeight = FontWeight.Bold)
     }
@@ -279,9 +277,9 @@ private fun AvatarRing(initial: String, hue: Color) {
 private fun StatusIndicator(status: String) {
     val t = DesignTokens
     when (status) {
-        "working" -> ScanlineIndicator(t.Status.Working)
-        "waiting" -> PulseDot(t.Status.Waiting)
-        else -> IdleDot(t.Status.Idle)
+        "working" -> ScanlineIndicator(DesignTokens.Status.Working)
+        "waiting" -> PulseDot(DesignTokens.Status.Waiting)
+        else -> IdleDot(DesignTokens.Status.Idle)
     }
 }
 
@@ -292,13 +290,16 @@ private fun ScanlineIndicator(color: Color) {
     val progress by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
-        animationSpec = tween(t.Motion.ScanlineMs, easing = LinearEasing, repeat = RepeatMode.Restart),
+        animationSpec = infiniteRepeatable(
+            animation = tween(DesignTokens.Motion.ScanlineMs, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
         label = "scanline-progress",
     )
     Box(
         Modifier
             .size(width = 40.dp, height = 8.dp)
-            .background(t.Surfaces.SurfaceHigh, RoundedCornerShape(4.dp)),
+            .background(DesignTokens.Surfaces.SurfaceHigh, RoundedCornerShape(4.dp)),
     ) {
         Box(
             Modifier
@@ -308,7 +309,7 @@ private fun ScanlineIndicator(color: Color) {
                 .padding(horizontal = 0.dp)
                 .let {
                     // translate the 10dp bar across the 40dp track via offset
-                    it.offset(x = androidx.compose.ui.unit.Dp((progress * 30).toInt()), y = 0.dp)
+                    it.offset(x = (progress * 30).dp, y = 0.dp)
                 },
         )
     }
@@ -321,7 +322,10 @@ private fun PulseDot(color: Color) {
     val alpha by transition.animateFloat(
         initialValue = 0.35f,
         targetValue = 1f,
-        animationSpec = tween(t.Motion.PulseMs, repeat = RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(
+            animation = tween(DesignTokens.Motion.PulseMs),
+            repeatMode = RepeatMode.Reverse,
+        ),
         label = "pulse-alpha",
     )
     Box(
@@ -347,16 +351,16 @@ private fun IdleDot(color: Color) {
 @Composable
 private fun NeedsYouStack() {
     val t = DesignTokens
-    Column(verticalArrangement = Arrangement.spacedBy(t.Density.StackGap.dp)) {
-        Text("Needs you", style = MaterialTheme.typography.titleMedium, color = t.Chrome.TextSecondary)
+    Column(verticalArrangement = Arrangement.spacedBy(DesignTokens.Density.StackGap.dp)) {
+        Text("Needs you", style = MaterialTheme.typography.titleMedium, color = DesignTokens.Chrome.TextSecondary)
         Surface(
-            shape = RoundedCornerShape(t.Shape.CardRadius),
-            color = t.Surfaces.Surface,
-            modifier = Modifier.border(width = 1.dp, color = t.Status.Critical.copy(alpha = 0.5f), shape = RoundedCornerShape(t.Shape.CardRadius)),
+            shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
+            color = DesignTokens.Surfaces.Surface,
+            modifier = Modifier.border(width = 1.dp, color = DesignTokens.Status.Critical.copy(alpha = 0.5f), shape = RoundedCornerShape(DesignTokens.Shape.CardRadius)),
         ) {
             Column(Modifier.padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("CRITICAL", style = MaterialTheme.typography.labelSmall, color = t.Status.Critical, fontWeight = FontWeight.Bold)
+                    Text("CRITICAL", style = MaterialTheme.typography.labelSmall, color = DesignTokens.Status.Critical, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.width(8.dp))
                     Text("sable · deletes build output", style = MaterialTheme.typography.bodyMedium)
                 }
@@ -365,7 +369,7 @@ private fun NeedsYouStack() {
                     "rm -rf /data/data/com.myapp/files/build/",
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
-                    color = t.Chrome.TextSecondary,
+                    color = DesignTokens.Chrome.TextSecondary,
                 )
                 // TODO: Approve/Deny buttons wire to the approval RPC (Phase 2).
             }

@@ -190,13 +190,10 @@ class BotScheduler:
         async with self._sem:
             state = self.store.get_or_create(job["bot"])
             if state.load_state_json().get("paused"):
-                # Paused bots buffer: the cron_result lands in the journal
-                # and is drained when the bot is resumed.
-                state.enqueue_wakeup(
-                    {"type": "cron_result", "from_bot": "cron", "to_bot": job["bot"],
-                     "corr_id": job.get("id", ""), "priority": "fyi",
-                     "payload": {"job_id": job.get("id"), "buffered": True}, "timestamp": "now"}
-                )
+                # Paused bots buffer: CronScheduler._record_result journals the
+                # real cron_result into the bot's wakeup queue, so the run is
+                # not lost and drains when the bot is resumed. Do not enqueue
+                # a second, placeholder event here.
                 return AgentLoop.isolated_result(None, "bot paused; job buffered")
             agent = AgentLoop(state, self.config, self.ipc, self.tools)
             result = await agent.run_turn(TriggerEvent(kind="user_message", payload=prompt))
@@ -214,6 +211,13 @@ class BotScheduler:
         """
         if not bot_name:
             return {"ok": False, "error": "run_bot requires 'bot'"}
+        # The app's L3 catch-up worker sends {"trigger":"catch_up"}: replay
+        # missed cron windows once, then run the chief-of-staff turn so it can
+        # aggregate the outcome for the human.
+        catch_up = trigger.get("trigger") == "catch_up"
+        replayed: List[Dict[str, Any]] = []
+        if catch_up:
+            replayed = await self.cron.tick(is_boot=True)
         async with self._sem:
             state = self.store.get_or_create(bot_name)
             if state.load_state_json().get("paused"):
@@ -225,6 +229,11 @@ class BotScheduler:
                     )
                 return {"ok": False, "error": "bot paused; trigger buffered"}
             message = trigger.get("message")
+            if message is None and catch_up:
+                message = (
+                    "catch_up: replayed %d missed routine window(s). "
+                    "Review the results in your wakeup queue." % len(replayed)
+                )
             queued = message is None and state.peek_wakeup()
             if message is None and queued is None:
                 return {"ok": True, "skipped": True, "reason": "no pending trigger or wakeup"}
@@ -314,7 +323,9 @@ async def run_daemon(config: Config) -> int:
     chief_bot = "chief" if (config.home_path / "bots" / "chief").exists() else None
     bus = MessageBus(config.home_path, store.states, chief_bot=chief_bot)
     ipc = IpcServer(config, state_store=store, bus=bus)
-    tools = ToolRegistry(config, ipc=ipc, bus=bus)
+    # ``get_or_create`` doubles as the state resolver so tools that read
+    # per-bot state (list_inbox, session search) work on a live daemon.
+    tools = ToolRegistry(config, ipc=ipc, bus=bus, state_resolver=store.get_or_create)
     scheduler = BotScheduler(config, store, ipc, bus, tools)
     bus.urgent_waker = scheduler.wake_bot
     ipc.scheduler = scheduler

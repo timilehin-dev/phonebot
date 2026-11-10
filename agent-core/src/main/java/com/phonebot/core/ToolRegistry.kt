@@ -5,6 +5,8 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -39,16 +41,15 @@ class ToolRegistry(
      * the contracts/registry.json schema) into [ToolDescriptor]s.
      */
     fun loadFromRegistryJson(json: String) {
-        val arr = Json.parseToJsonElement(json).jsonObject["tools"]?.jsonObject?.get("items")
-        val parsed: List<ToolDescriptor> = when (val raw = Json.parseToJsonElement(json)) {
-            is JsonArray -> raw.map {
-                ToolDescriptor.fromJsonElement(it.jsonObject)
-            }
-            is JsonObject -> (raw["tools"] as? JsonArray)?.map { ToolDescriptor.fromJsonElement(it.jsonObject) }
-                ?: emptyList()
-            else -> emptyList()
+        val root = Json.parseToJsonElement(json)
+        val array: JsonArray = when (root) {
+            is JsonArray -> root
+            is JsonObject -> root["tools"] as? JsonArray ?: JsonArray(emptyList())
+            else -> JsonArray(emptyList())
         }
-        tools = parsed
+        tools = array.mapNotNull { element ->
+            (element as? JsonObject)?.let { toolDescriptorFromJsonElement(it) }
+        }
     }
 
     /** Tools permitted for [botId] — intersection of the registry and the allowlist. */
@@ -74,7 +75,7 @@ class ToolRegistry(
                     put("function", buildJsonObject {
                         put("name", tool.id)
                         put("description", tool.description)
-                        put("parameters", tool.parameters.toJsonElement())
+                        put("parameters", tool.inputSchema)
                     })
                 })
             }
@@ -87,19 +88,32 @@ class ToolRegistry(
 // JSON helpers
 // ---------------------------------------------------------------------------
 
-internal fun ToolDescriptor.fromJsonElement(el: JsonObject): ToolDescriptor = ToolDescriptor(
+internal fun toolDescriptorFromJsonElement(el: JsonObject): ToolDescriptor = ToolDescriptor(
     id = el["id"]?.jsonPrimitive?.content ?: "",
+    kind = kindFrom(el["kind"]?.jsonPrimitive?.content),
+    provider = el["provider"]?.jsonPrimitive?.content ?: "botd",
     name = el["name"]?.jsonPrimitive?.content ?: el["id"]?.jsonPrimitive?.content ?: "",
     description = el["description"]?.jsonPrimitive?.content ?: "",
-    parameters = JsonObjectLike(el["parameters"]?.jsonObject?.mapValues {
-        it.value.toString()
-    } ?: emptyMap()),
-    risk = runCatching { RiskTier.valueOf(el["risk"]?.jsonPrimitive?.content ?: "info") }.getOrDefault(RiskTier.Info),
-    backends = (el["backends"] as? JsonArray)?.mapNotNull { it?.jsonPrimitive?.content } ?: emptyList(),
-    phase = runCatching { Phase.valueOf(el["phase"]?.jsonPrimitive?.content ?: "execute") }.getOrDefault(Phase.Execute),
-    idempotent = el["idempotent"]?.jsonPrimitive?.content?.toBoolean() ?: true,
+    inputSchema = el["input_schema"]?.jsonObject ?: JsonObject(emptyMap()),
+    risk = riskFrom(el["risk"]?.jsonPrimitive?.content),
+    riskRules = el["risk_rules"] as? JsonArray ?: JsonArray(emptyList()),
+    backends = (el["backends"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList(),
+    phase = el["phase"]?.jsonPrimitive?.intOrNull ?: 1,
+    defaultAllowed = el["default_allowed"]?.jsonPrimitive?.content?.toBoolean() ?: true,
 )
 
-internal fun JsonObjectLike.toJsonElement(): JsonObject = buildJsonObject {
-    fields.forEach { (k, v) -> put(k, v.toString()) }
+/** Map the contract's risk vocabulary onto the typed enum (unknown → read). */
+internal fun riskFrom(value: String?): RiskTier = when (value) {
+    "write" -> RiskTier.Write
+    "costly" -> RiskTier.Costly
+    "destructive" -> RiskTier.Destructive
+    "privileged" -> RiskTier.Privileged
+    else -> RiskTier.Read
+}
+
+/** Map the contract's kind vocabulary onto the typed enum (unknown → builtin). */
+internal fun kindFrom(value: String?): ToolKind = when (value) {
+    "custom" -> ToolKind.Custom
+    "mcp" -> ToolKind.Mcp
+    else -> ToolKind.Builtin
 }

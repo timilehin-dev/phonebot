@@ -2,6 +2,7 @@ package com.phonebot.design
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
@@ -11,12 +12,12 @@ import androidx.compose.ui.unit.sp
  * Values mirror docs/design-tokens.md. Colors are exact hex; type specs are
  * set in sp so they survive display scaling.
  */
-sealed object DesignTokens {
+object DesignTokens {
 
     // ------------------------------------------------------------------
     // Surfaces (monochrome chrome)
     // ------------------------------------------------------------------
-    sealed object Surfaces {
+    object Surfaces {
         val Background = Color(0xFF0B0D10)      // deepest panel
         val Surface = Color(0xFF14171C)
         val SurfaceContainer = Color(0xFF1B1F26)
@@ -28,7 +29,7 @@ sealed object DesignTokens {
     // ------------------------------------------------------------------
     // Chrome (monochrome text + outline)
     // ------------------------------------------------------------------
-    sealed object Chrome {
+    object Chrome {
         val Text = Color(0xFFF2F4F8)
         val TextSecondary = Color(0xFF9AA3B2)
         val TextFaint = Color(0xFF5A6272)
@@ -39,7 +40,7 @@ sealed object DesignTokens {
     // ------------------------------------------------------------------
     // Status colors (instrument-panel semantics)
     // ------------------------------------------------------------------
-    sealed object Status {
+    object Status {
         val Working = Color(0xFFFFB020)   // amber — scanline animation on bot cards
         val Waiting = Color(0xFF4D9FFF)  // info blue — pulse animation
         val Ok = Color(0xFF3DD68C)       // done / healthy
@@ -52,7 +53,7 @@ sealed object DesignTokens {
     // Bot hues — one per bot, used for avatar rings, accents, thread markers.
     // Hues are spaced around the wheel so simultaneous bots never collide.
     // ------------------------------------------------------------------
-    sealed object BotHues {
+    object BotHues {
         val H0 = Color(0xFF4DA3FF) // sapphire
         val H1 = Color(0xFF3DD68C) // mint
         val H2 = Color(0xFFC58BFF) // orchid
@@ -68,7 +69,7 @@ sealed object DesignTokens {
     // ------------------------------------------------------------------
     // Type scale
     // ------------------------------------------------------------------
-    sealed object Type {
+    object Type {
         val Display = TypeSpec(28.sp, 34.sp)          // screen titles, Observatory digest
         val Title = TypeSpec(20.sp, 26.sp)            // card titles, section headers
         val Body = TypeSpec(15.sp, 22.sp)             // default text
@@ -80,7 +81,7 @@ sealed object DesignTokens {
     // ------------------------------------------------------------------
     // Motion (instrument feel: fast, tight, no springy overshoot)
     // ------------------------------------------------------------------
-    sealed object Motion {
+    object Motion {
         val TapMs = 120
         val ChipMs = 180
         val SlideMs = 240
@@ -91,14 +92,14 @@ sealed object DesignTokens {
     // ------------------------------------------------------------------
     // Radii / density (M3 expressive but disciplined)
     // ------------------------------------------------------------------
-    sealed object Shape {
-        const val CardRadius = 20f
-        const val ChipRadius = 999f
-        const val InputRadius = 12f
-        const val BlockRadius = 8f  // mono command blocks
+    object Shape {
+        val CardRadius = 20.dp
+        val ChipRadius = 999.dp
+        val InputRadius = 12.dp
+        val BlockRadius = 8.dp
     }
 
-    sealed object Density {
+    object Density {
         const val ScreenPad = 20f    // 20dp horizontal page gutter
         const val CardGap = 12f
         const val StackGap = 8f

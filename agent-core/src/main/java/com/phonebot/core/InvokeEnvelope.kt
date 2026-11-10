@@ -24,7 +24,7 @@ data class InvokeRequest(
     /** Tool id to invoke, e.g. "shell.run" (see builtin-tools-phase1.json). */
     val tool: String,
     /** Tool arguments; botd validates them against the ToolDescriptor schema. */
-    val args: Map<String, Any> = emptyMap(),
+    val args: JsonObject = JsonObject(emptyMap()),
     /** Invocation context, echoed back on the response. */
     val ctx: InvokeContext = InvokeContext(),
 )
@@ -97,8 +97,8 @@ data class InvokeResponse(
 
     @Serializable
     data class SideEffects(
-        val filesTouched: List<String> = emptyList(),
-        val busEvents: List<String> = emptyList(),
+        @SerialName("files_touched") val filesTouched: List<String> = emptyList(),
+        @SerialName("bus_events") val busEvents: List<String> = emptyList(),
     )
 }
 
@@ -138,7 +138,7 @@ data class TraceRecord(
     val kind: TraceKind,
     val label: String,
     /** Structured detail — args, result summary, token counts. */
-    val detail: Map<String, Any> = emptyMap(),
+    val detail: JsonObject = JsonObject(emptyMap()),
     @SerialName("ts") val timestamp: Long,
     @SerialName("duration_ms") val durationMs: Long? = null,
 )

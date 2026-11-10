@@ -130,10 +130,14 @@ class ToolRegistry:
         file_tools: Optional[Any] = None,
         web_tools: Optional[Any] = None,
         memory_tools: Optional[Any] = None,
+        state_resolver: Optional[Any] = None,
     ) -> None:
         self.config = config
         self.ipc = ipc
         self.bus = bus
+        #: ``bot_name -> BotState`` resolver injected by the daemon so
+        #: ``list_inbox`` and session search can reach per-bot state.
+        self._state_resolver_override = state_resolver
         self._descriptors: Dict[str, ToolDescriptor] = {}
         self._handlers: Dict[str, Callable[..., Any]] = {}
         self._risk_rules: List[RiskRule] = []
@@ -344,7 +348,13 @@ class ToolRegistry:
                     "type": "object",
                     "properties": {
                         "query": {"type": "string"},
-                        "target": {"type": "string"},
+                        "target": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": ["soul", "user", "memory", "sessions"],
+                            },
+                        },
                         "limit": {"type": "number"},
                     },
                     "required": ["query"],
@@ -423,11 +433,12 @@ class ToolRegistry:
     # State resolver hook (memory backend session search)
     # ------------------------------------------------------------------ #
     def _state_resolver(self):
-        """Return a ``bot_name -> BotState`` resolver, or None (Phase 1).
+        """Return the injected ``bot_name -> BotState`` resolver, or None.
 
-        The daemon can inject one so ``memory.search`` can reach session FTS.
+        The daemon injects one so ``memory.search`` can reach session FTS and
+        ``list_inbox`` can read a bot's wakeup journal.
         """
-        return getattr(self, "_state_resolver_override", None)
+        return self._state_resolver_override
 
     # ------------------------------------------------------------------ #
     # Handler bodies (thin; delegate to the backends)
@@ -486,16 +497,42 @@ class ToolRegistry:
         )
 
     async def _h_memory_search(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
-        target = args.get("target")
-        if target == "sessions":
-            return await self._memory.search_sessions(
-                ctx.bot_name, str(args.get("query", "")), limit=int(args.get("limit", 10))
+        # The contract types ``target`` as an array of doc names (+ sessions).
+        raw_targets = args.get("target")
+        if isinstance(raw_targets, str):
+            targets = [raw_targets]
+        elif isinstance(raw_targets, list):
+            targets = [str(t) for t in raw_targets]
+        else:
+            targets = []
+        query = str(args.get("query", ""))
+        limit = int(args.get("limit", 10))
+        if targets and "sessions" in targets:
+            if len(targets) == 1:
+                return await self._memory.search_sessions(ctx.bot_name, query, limit=limit)
+            sessions = await self._memory.search_sessions(ctx.bot_name, query, limit=limit)
+            docs = await self._memory.search_docs(
+                ctx.bot_name,
+                query,
+                targets=[t for t in targets if t != "sessions"],
+                limit=limit,
+            )
+            merged = list(docs.get("matches", [])) + list(sessions.get("matches", []))
+            return {
+                "ok": True,
+                "matches": merged[:limit],
+                "truncated": len(merged) > limit,
+                "backend": "docs+fts5" if sessions.get("ok") else "docs",
+            }
+        if len(targets) > 1:
+            return await self._memory.search_docs(
+                ctx.bot_name, query, targets=targets, limit=limit
             )
         return await self._memory.search_docs(
             ctx.bot_name,
-            str(args.get("query", "")),
-            target=target,
-            limit=int(args.get("limit", 10)),
+            query,
+            target=(targets[0] if targets else None),
+            limit=limit,
         )
 
     async def _h_request_approval(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:

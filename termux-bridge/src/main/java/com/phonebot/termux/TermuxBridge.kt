@@ -143,25 +143,39 @@ class TermuxBridge(private val context: Context) {
 
     /** `termux-notification`: title\nbody via Termux:API. */
     fun termuxNotification(title: String, body: String): Boolean =
-        runFallbackRunCommand("termux-notification \"$title\" \"$body\"")
+        runFallbackRunCommand(
+            "termux-notification --title ${shellQuote(title)} --content ${shellQuote(body)}"
+        )
 
     /** `termux-sms`: send an SMS (requires Termux:API + SMS permission). */
     fun termuxSms(number: String, body: String): Boolean =
-        runFallbackRunCommand("termux-sms -n \"$number\" \"$body\"")
+        runFallbackRunCommand("termux-sms-send -n ${shellQuote(number)} ${shellQuote(body)}")
 
     /** `termux-tts-speak`: speak text. */
     fun termuxTts(text: String): Boolean =
-        runFallbackRunCommand("termux-tts-speak \"$text\"")
+        runFallbackRunCommand("termux-tts-speak ${shellQuote(text)}")
+
+    /** Single-quote a value for the Termux shell. */
+    private fun shellQuote(value: String): String =
+        "'" + value.replace("'", "'\\''") + "'"
 
     /**
-     * RUN_COMMAND fallback: ask Termux:API's RunCommandService to run a
-     * command in the live Termux session. Returns false when Termux:API is
-     * not installed — the wizard installs it.
+     * RUN_COMMAND fallback: ask Termux's RunCommandService to run a command
+     * in the live Termux session. The documented API takes an executable
+     * path plus an argument array (not one command string). Returns false
+     * when Termux is not installed or does not accept the intent — the
+     * wizard installs it.
      */
     private fun runFallbackRunCommand(command: String): Boolean = try {
         val i = Intent().apply {
             setClassName("com.termux", "com.termux.app.RunCommandService")
-            putExtra("com.termux.RUN_COMMAND", command)
+            putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/bash")
+            putExtra(
+                "com.termux.RUN_COMMAND_ARGUMENTS",
+                arrayOf("-c", command),
+            )
+            putExtra("com.termux.RUN_COMMAND_WORKDIR", "/data/data/com.termux/files/home")
+            putExtra("com.termux.RUN_COMMAND_BACKGROUND", false)
         }
         context.startService(i)
         true
@@ -176,7 +190,14 @@ class TermuxBridge(private val context: Context) {
     private fun cliFrame(vararg pairs: Pair<String, String>): String {
         val obj = kotlinx.serialization.json.buildJsonObject {
             pairs.forEach { (k, v) ->
-                put(k, json.parseToJsonElement(v))
+                // JSON payloads (trigger/payload/tools/messages) are parsed;
+                // plain values such as a bot name must stay strings, not be
+                // fed to parseToJsonElement ("main" is not valid JSON).
+                val trimmed = v.trimStart()
+                val parsed = if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                    runCatching { json.parseToJsonElement(v) }.getOrNull()
+                } else null
+                put(k, parsed ?: kotlinx.serialization.json.JsonPrimitive(v))
             }
         }
         return obj.toString()

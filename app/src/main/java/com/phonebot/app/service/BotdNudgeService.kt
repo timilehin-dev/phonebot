@@ -47,7 +47,7 @@ class BotdNudgeService : Service() {
     }
 
     override fun onDestroy() {
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopForeground(Service.STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 

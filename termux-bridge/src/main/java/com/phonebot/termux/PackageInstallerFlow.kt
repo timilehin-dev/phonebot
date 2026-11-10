@@ -5,9 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.os.CancellationResult
-import android.os.Handler
-import android.os.Looper
 import androidx.core.content.FileProvider
 import java.io.File
 import java.security.MessageDigest
@@ -46,11 +43,23 @@ class PackageInstallerFlow(private val context: Context) {
         object Cancelled : InstallOutcome
     }
 
-    // Well-known F-Droid specs. Hashes are placeholders — the wizard fetches
-    // the live values from F-Droid's flatpak repo index at runtime in Phase 2.
-    val TERMUX = InstallSpec("com.termux", "https://f-droid.org/repo/com.termux.apk", "TODO-pin-sha256")
-    val TERMUX_API = InstallSpec("com.termux.api", "https://f-droid.org/repo/com.termux.api.apk", "TODO-pin-sha256")
-    val TERMUX_BOOT = InstallSpec("com.termux.boot", "https://f-droid.org/repo/com.termux.boot.apk", "TODO-pin-sha256")
+    // F-Droid specs pinned to specific stable APKs. The SHA-256 values match
+    // F-Droid's signed index-v1 metadata; update all three together on bump.
+    val TERMUX = InstallSpec(
+        "com.termux",
+        "https://f-droid.org/repo/com.termux_1002.apk",
+        "e6265a57eb5ca363808488e3b01955958bed93bc0c8a0d281849b363b11027ec",
+    )
+    val TERMUX_API = InstallSpec(
+        "com.termux.api",
+        "https://f-droid.org/repo/com.termux.api_1002.apk",
+        "4497dbbf81906df52e59ed387a5223d225aa0de3aca817cc557a621e4dadda44",
+    )
+    val TERMUX_BOOT = InstallSpec(
+        "com.termux.boot",
+        "https://f-droid.org/repo/com.termux.boot_1000.apk",
+        "6f7cf9b94f539d3efd4af3544ff819947b49395275d8cfa7e5f80de14f3d9cf8",
+    )
 
     // ------------------------------------------------------------------
     // 1+2. Download & verify
@@ -107,14 +116,13 @@ class PackageInstallerFlow(private val context: Context) {
     fun installSession(api35Spec: InstallSpec, apk: File): PendingInstallResult {
         val installer = context.packageManager.packageInstaller
         val params = android.content.pm.PackageInstaller.SessionParams(
-            if (api35Spec.packageName == context.packageName)
-                android.content.pm.PackageInstaller.SessionParams.MODE_INHERIT_USER
-            else
-                android.content.pm.PackageInstaller.SessionParams.MODE_FULLY_ASYNC,
+            android.content.pm.PackageInstaller.SessionParams.MODE_FULL_INSTALL,
         )
         val sessionId = installer.createSession(params)
         val session = installer.openSession(sessionId)
-        session.openWriteInput().use { out -> apk.inputStream().copyTo(out) }
+        session.openWrite("base.apk", 0, apk.length()).use { out ->
+            apk.inputStream().copyTo(out)
+        }
         val done = PendingIntent.getBroadcast(
             context, 0, Intent(context, PackageInstallReceiver::class.java).apply {
                 putExtra("package", api35Spec.packageName)
@@ -162,7 +170,7 @@ class PackageInstallerFlow(private val context: Context) {
         }
         context.registerReceiver(
             receiver,
-            android.content.IntentFilter(Intent.ACTION_PACKAGE_INSTALLED).apply {
+            android.content.IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply {
                 addDataScheme("package")
             },
         )

@@ -52,6 +52,28 @@ DANGEROUS_COMMAND_PATTERNS: List[Tuple[str, str]] = [
 
 _DANGEROUS_COMPILED = [(re.compile(p), note) for p, note in DANGEROUS_COMMAND_PATTERNS]
 
+#: Environment variables a tool call may never set or override. Credentials
+#: belong to the daemon/vault, not to model-supplied args (spec: "env must
+#: not override credential variables").
+_PROTECTED_ENV_PREFIXES = (
+    "PHONEBOT_",
+    "OPENAI_",
+    "ANTHROPIC_",
+    "AWS_",
+    "GITHUB_",
+    "GH_",
+    "HF_",
+)
+_PROTECTED_ENV_SUBSTRINGS = ("API_KEY", "APIKEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
+
+
+def _is_protected_env_key(key: str) -> bool:
+    """True when ``key`` names a credential the tool may not override."""
+    upper = key.upper()
+    if upper.startswith(_PROTECTED_ENV_PREFIXES):
+        return True
+    return any(part in upper for part in _PROTECTED_ENV_SUBSTRINGS)
+
 
 def contains_dangerous_command(command: str) -> Optional[str]:
     """Return the first matching danger note, or None when safe."""
@@ -114,8 +136,10 @@ class TermuxShellBackend(ShellBackend):
             }
         env = os.environ.copy()
         env.update(self._extra_env)
-        if extra_env:
-            env.update(extra_env)
+        for key, value in (extra_env or {}).items():
+            if _is_protected_env_key(key):
+                continue  # credential override attempt: ignore it
+            env[key] = value
         proc = await asyncio.create_subprocess_shell(
             command,
             cwd=cwd or None,
@@ -198,9 +222,17 @@ class SSHShellBackend(ShellBackend):
         async with self._lock:
             try:
                 conn = self._conn if self._conn is not None else await self._connect()
-                env = dict(os.environ)
-                if extra_env:
-                    env.update(extra_env)
+                # Do not ship the daemon's whole environment (and its
+                # credentials) to the remote host: forward a minimal shell
+                # environment plus non-credential extras only.
+                env = {
+                    key: os.environ[key]
+                    for key in ("PATH", "LANG", "LC_ALL", "TERM")
+                    if key in os.environ
+                }
+                for key, value in (extra_env or {}).items():
+                    if not _is_protected_env_key(key):
+                        env[key] = value
                 result = await conn.run(
                     command, cwd=cwd, timeout=timeout_s,
                     combine_stderr=False, env=env,

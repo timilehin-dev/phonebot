@@ -43,26 +43,33 @@ DIST = REPO / "release" / "dist"
 # --------------------------------------------------------------------------- #
 # F-Droid APKs the first-run wizard auto-installs (version-pinned).
 # --------------------------------------------------------------------------- #
-FDOID_APKS: List[Dict[str, str]] = [
+FDOID_APKS: List[Dict[str, Any]] = [
     {
         "name": "Termux",
         # F-Droid is the only build that works for our background automation
         # (the Play Store build's integrity check breaks proot/crun).
-        "url": "https://f-droid.org/F-Droid.apk",  # placeholder; pin real at release
+        # Pinned to the latest stable (not the 0.119 beta line).
+        "url": "https://f-droid.org/repo/com.termux_1002.apk",
         "package": "com.termux",
-        "min_version": "0.118",
+        "version": "0.118.3",
+        "version_code": 1002,
+        "sha256": "e6265a57eb5ca363808488e3b01955958bed93bc0c8a0d281849b363b11027ec",
     },
     {
         "name": "Termux:API",
-        "url": "https://f-droid.org/repo/com.termux.api_*.apk",
+        "url": "https://f-droid.org/repo/com.termux.api_1002.apk",
         "package": "com.termux.api",
-        "min_version": "0.40",
+        "version": "0.53.0",
+        "version_code": 1002,
+        "sha256": "4497dbbf81906df52e59ed387a5223d225aa0de3aca817cc557a621e4dadda44",
     },
     {
         "name": "Termux:Boot",
-        "url": "https://f-droid.org/repo/com.termux.boot_*.apk",
+        "url": "https://f-droid.org/repo/com.termux.boot_1000.apk",
         "package": "com.termux.boot",
-        "min_version": "0.1",
+        "version": "0.8.1",
+        "version_code": 1000,
+        "sha256": "6f7cf9b94f539d3efd4af3544ff819947b49395275d8cfa7e5f80de14f3d9cf8",
     },
 ]
 

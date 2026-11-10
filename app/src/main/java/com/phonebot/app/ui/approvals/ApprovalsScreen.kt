@@ -1,6 +1,7 @@
 package com.phonebot.app.ui.approvals
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.phonebot.design.DesignTokens
 
@@ -54,16 +56,16 @@ fun ApprovalsScreen(onBack: () -> Unit = {}) {
     var confirmState by remember { mutableStateOf(false) }
 
     LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = t.Density.ScreenPad.dp),
-        verticalArrangement = Arrangement.spacedBy(t.Density.CardGap.dp),
-        padding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 96.dp),
+        Modifier.fillMaxSize().padding(horizontal = DesignTokens.Density.ScreenPad.dp),
+        verticalArrangement = Arrangement.spacedBy(DesignTokens.Density.CardGap.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 96.dp),
     ) {
         // Header
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Approvals", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.weight(1f))
-                Text("3 pending", style = MaterialTheme.typography.labelSmall, color = t.Chrome.TextFaint)
+                Text("3 pending", style = MaterialTheme.typography.labelSmall, color = DesignTokens.Chrome.TextFaint)
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -72,8 +74,8 @@ fun ApprovalsScreen(onBack: () -> Unit = {}) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 LegendDot(Color(0xFF5A6272), "info")
-                LegendDot(t.Status.Waiting, "confirm")
-                LegendDot(t.Status.Critical, "critical")
+                LegendDot(DesignTokens.Status.Waiting, "confirm")
+                LegendDot(DesignTokens.Status.Critical, "critical")
             }
             Spacer(Modifier.height(4.dp))
         }
@@ -155,11 +157,11 @@ private val placeholderInfo = listOf(
  * monospace block plus Approve / Deny / Ask buttons.
  */
 @Composable
-fun CriticalApprovalCard(req: ApprovalRequest, expanded: Boolean) {
+private fun CriticalApprovalCard(req: ApprovalRequest, expanded: Boolean) {
     val t = DesignTokens
     Surface(
-        shape = RoundedCornerShape(t.Shape.CardRadius),
-        color = t.Surfaces.Surface,
+        shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
+        color = DesignTokens.Surfaces.Surface,
         modifier = Modifier.fillMaxWidth().borderCritical(),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -168,29 +170,29 @@ fun CriticalApprovalCard(req: ApprovalRequest, expanded: Boolean) {
                 Spacer(Modifier.width(6.dp))
                 Text(req.bot, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
-                Surface(shape = RoundedCornerShape(4.dp), color = t.Status.Critical.copy(alpha = 0.18f)) {
+                Surface(shape = RoundedCornerShape(4.dp), color = DesignTokens.Status.Critical.copy(alpha = 0.18f)) {
                     Text(" CRITICAL ", Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall, color = t.Status.Critical,
+                        style = MaterialTheme.typography.labelSmall, color = DesignTokens.Status.Critical,
                         fontWeight = FontWeight.Bold)
                 }
             }
             if (expanded) {
                 // Mono command block
-                Surface(shape = RoundedCornerShape(t.Shape.BlockRadius), color = t.Surfaces.Background) {
+                Surface(shape = RoundedCornerShape(DesignTokens.Shape.BlockRadius), color = DesignTokens.Surfaces.Background) {
                     Text(
                         req.command,
                         Modifier.padding(10.dp),
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
-                        color = t.Status.Critical,
+                        color = DesignTokens.Status.Critical,
                     )
                 }
-                Text(req.detail, style = MaterialTheme.typography.bodySmall, color = t.Chrome.TextSecondary)
+                Text(req.detail, style = MaterialTheme.typography.bodySmall, color = DesignTokens.Chrome.TextSecondary)
                 // Action buttons
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ApprovalButton("Approve", t.Status.Ok, Modifier.weight(1f))
-                    ApprovalButton("Deny", t.Status.Critical, Modifier.weight(1f))
-                    ApprovalButton("Ask", t.Status.Waiting, Modifier.weight(1f))
+                    ApprovalButton("Approve", DesignTokens.Status.Ok, Modifier.weight(1f))
+                    ApprovalButton("Deny", DesignTokens.Status.Critical, Modifier.weight(1f))
+                    ApprovalButton("Ask", DesignTokens.Status.Waiting, Modifier.weight(1f))
                 }
                 // TODO: wire Approve/Deny/Ask to the botd approval RPC (Phase 2).
             }
@@ -207,15 +209,16 @@ private fun ApprovalButton(label: String, color: Color, modifier: Modifier = Mod
     val t = DesignTokens
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(t.Shape.BlockRadius),
+        shape = RoundedCornerShape(DesignTokens.Shape.BlockRadius),
         color = color.copy(alpha = 0.15f),
     ) {
         Text(
             label,
-            Modifier.padding(vertical = 8.dp).let { it.align(Alignment.Center) },
+            Modifier.fillMaxWidth().padding(vertical = 8.dp),
             style = MaterialTheme.typography.labelMedium,
             color = color,
             fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -225,26 +228,26 @@ private fun ApprovalButton(label: String, color: Color, modifier: Modifier = Mod
 private fun ConfirmApprovalRow(req: ApprovalRequest, approved: Boolean) {
     val t = DesignTokens
     Surface(
-        shape = RoundedCornerShape(t.Shape.CardRadius),
-        color = if (approved) t.Surfaces.Surface else t.Surfaces.SurfaceContainer,
+        shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
+        color = if (approved) DesignTokens.Surfaces.Surface else DesignTokens.Surfaces.SurfaceContainer,
     ) {
         Row(
             Modifier.fillMaxWidth().padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.size(8.dp).background(
-                if (approved) t.Status.Ok else t.Status.Waiting, CircleShape))
+                if (approved) DesignTokens.Status.Ok else DesignTokens.Status.Waiting, CircleShape))
             Spacer(Modifier.width(10.dp))
             Column {
                 Text(req.bot, style = MaterialTheme.typography.titleSmall)
                 Text(req.command, style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace, color = t.Chrome.TextFaint, maxLines = 1)
+                    fontFamily = FontFamily.Monospace, color = DesignTokens.Chrome.TextFaint, maxLines = 1)
             }
             Spacer(Modifier.weight(1f))
             Text(
                 if (approved) "✓ approved" else "confirm",
                 style = MaterialTheme.typography.labelSmall,
-                color = if (approved) t.Status.Ok else t.Status.Waiting,
+                color = if (approved) DesignTokens.Status.Ok else DesignTokens.Status.Waiting,
             )
         }
     }
@@ -254,12 +257,12 @@ private fun ConfirmApprovalRow(req: ApprovalRequest, approved: Boolean) {
 @Composable
 private fun InfoApprovalRow(req: ApprovalRequest) {
     val t = DesignTokens
-    Surface(shape = RoundedCornerShape(t.Shape.CardRadius), color = t.Surfaces.Surface) {
+    Surface(shape = RoundedCornerShape(DesignTokens.Shape.CardRadius), color = DesignTokens.Surfaces.Surface) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(8.dp).background(t.Chrome.TextFaint, CircleShape))
+            Box(Modifier.size(8.dp).background(DesignTokens.Chrome.TextFaint, CircleShape))
             Spacer(Modifier.width(10.dp))
             Text(req.command, style = MaterialTheme.typography.bodySmall,
-                color = t.Chrome.TextSecondary, maxLines = 1)
+                color = DesignTokens.Chrome.TextSecondary, maxLines = 1)
         }
     }
 }

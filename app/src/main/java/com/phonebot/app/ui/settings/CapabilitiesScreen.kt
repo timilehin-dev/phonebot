@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.toggleable.ToggleableState
-import androidx.compose.foundation.toggleable.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -56,7 +54,7 @@ fun CapabilitiesScreen(onBack: () -> Unit = {}) {
     Column(
         Modifier
             .fillMaxSize()
-            .padding(horizontal = t.Density.ScreenPad.dp),
+            .padding(horizontal = DesignTokens.Density.ScreenPad.dp),
     ) {
         Text("Capabilities", style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(vertical = 12.dp))
@@ -65,7 +63,7 @@ fun CapabilitiesScreen(onBack: () -> Unit = {}) {
             Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(t.Density.CardGap.dp),
+            verticalArrangement = Arrangement.spacedBy(DesignTokens.Density.CardGap.dp),
         ) {
             ToolsSection()
             SkillsSection()
@@ -84,10 +82,10 @@ fun CapabilitiesScreen(onBack: () -> Unit = {}) {
 private fun SectionHeader(title: String, subtitle: String? = null) {
     val t = DesignTokens
     Column(Modifier.padding(vertical = 4.dp)) {
-        Text(title, style = MaterialTheme.typography.titleSmall, color = t.Chrome.TextSecondary,
+        Text(title, style = MaterialTheme.typography.titleSmall, color = DesignTokens.Chrome.TextSecondary,
             fontWeight = FontWeight.SemiBold)
         if (subtitle != null) {
-            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = t.Chrome.TextFaint)
+            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = DesignTokens.Chrome.TextFaint)
         }
     }
 }
@@ -112,8 +110,8 @@ private fun ToolsSection() {
     var tools by remember { mutableStateOf(placeholderTools) }
 
     Surface(
-        shape = RoundedCornerShape(t.Shape.CardRadius),
-        color = t.Surfaces.Surface,
+        shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
+        color = DesignTokens.Surfaces.Surface,
     ) {
         Column(Modifier.padding(16.dp)) {
             SectionHeader("Tools", "Per-bot allowlists are enforced by the LLM prompt")
@@ -122,9 +120,9 @@ private fun ToolsSection() {
                 Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(tool.name, style = MaterialTheme.typography.bodyMedium,
-                            fontFamily = FontFamily.Monospace, color = t.Chrome.Text)
+                            fontFamily = FontFamily.Monospace, color = DesignTokens.Chrome.Text)
                         Text(tool.description, style = MaterialTheme.typography.labelSmall,
-                            color = t.Chrome.TextFaint)
+                            color = DesignTokens.Chrome.TextFaint)
                     }
                     Switch(
                         checked = tool.enabled,
@@ -132,8 +130,10 @@ private fun ToolsSection() {
                             tools = tools.toMutableList().also { it[i] = tool.copy(enabled = enabled) }
                         },
                         colors = SwitchDefaults.colors(
-                            checkedColor = t.Status.Ok,
-                            uncheckedColor = t.Chrome.Outline,
+                            checkedThumbColor = DesignTokens.Status.Ok,
+                            checkedTrackColor = DesignTokens.Status.Ok.copy(alpha = 0.4f),
+                            uncheckedThumbColor = DesignTokens.Chrome.TextSecondary,
+                            uncheckedTrackColor = DesignTokens.Chrome.Outline,
                         ),
                     )
                 }
@@ -158,7 +158,7 @@ private val placeholderSkills = listOf(
 @Composable
 private fun SkillsSection() {
     val t = DesignTokens
-    Surface(shape = RoundedCornerShape(t.Shape.CardRadius), color = t.Surfaces.Surface) {
+    Surface(shape = RoundedCornerShape(DesignTokens.Shape.CardRadius), color = DesignTokens.Surfaces.Surface) {
         Column(Modifier.padding(16.dp)) {
             SectionHeader("Skills", "Library + per-bot visibility toggles")
             Spacer(Modifier.height(8.dp))
@@ -166,15 +166,15 @@ private fun SkillsSection() {
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(skill.name, style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = FontFamily.Monospace, color = t.Chrome.Text)
+                        fontFamily = FontFamily.Monospace, color = DesignTokens.Chrome.Text)
                     Spacer(Modifier.weight(1f))
                     // Per-bot visibility dots
-                    listOf("atlas" to t.BotHues.H0, "sable" to t.BotHues.H1,
-                        "vex" to t.BotHues.H2, "onyx" to t.BotHues.H3)
+                    listOf("atlas" to DesignTokens.BotHues.H0, "sable" to DesignTokens.BotHues.H1,
+                        "vex" to DesignTokens.BotHues.H2, "onyx" to DesignTokens.BotHues.H3)
                         .forEach { (botName, hue) ->
                             val visible = skill.visibleBots.contains(botName)
                             Box(Modifier.size(8.dp).background(
-                                if (visible) hue else t.Chrome.Outline, CircleShape))
+                                if (visible) hue else DesignTokens.Chrome.Outline, CircleShape))
                             Spacer(Modifier.width(4.dp))
                         }
                 }
@@ -199,17 +199,17 @@ private val placeholderMcp = listOf(
 @Composable
 private fun McpSection() {
     val t = DesignTokens
-    Surface(shape = RoundedCornerShape(t.Shape.CardRadius), color = t.Surfaces.Surface) {
+    Surface(shape = RoundedCornerShape(DesignTokens.Shape.CardRadius), color = DesignTokens.Surfaces.Surface) {
         Column(Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 SectionHeader("Plugins & MCP", "Connections list · health status")
                 Spacer(Modifier.weight(1f))
-                Surface(shape = RoundedCornerShape(t.Shape.ChipRadius), color = t.Surfaces.SurfaceHigh) {
+                Surface(shape = RoundedCornerShape(DesignTokens.Shape.ChipRadius), color = DesignTokens.Surfaces.SurfaceHigh) {
                     Text(
                         " + add new",
                         Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        color = t.Status.Waiting,
+                        color = DesignTokens.Status.Waiting,
                     )
                 }
             }
@@ -218,13 +218,13 @@ private fun McpSection() {
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(8.dp).background(
-                        if (mcp.healthy) t.Status.Ok else t.Status.Critical, CircleShape))
+                        if (mcp.healthy) DesignTokens.Status.Ok else DesignTokens.Status.Critical, CircleShape))
                     Spacer(Modifier.width(8.dp))
                     Column {
                         Text(mcp.name, style = MaterialTheme.typography.bodyMedium,
-                            fontFamily = FontFamily.Monospace, color = t.Chrome.Text)
+                            fontFamily = FontFamily.Monospace, color = DesignTokens.Chrome.Text)
                         Text(mcp.endpoint, style = MaterialTheme.typography.labelSmall,
-                            color = t.Chrome.TextFaint, fontFamily = FontFamily.Monospace)
+                            color = DesignTokens.Chrome.TextFaint, fontFamily = FontFamily.Monospace)
                     }
                 }
             }
@@ -240,7 +240,7 @@ private fun McpSection() {
 @Composable
 private fun BackendsSection() {
     val t = DesignTokens
-    Surface(shape = RoundedCornerShape(t.Shape.CardRadius), color = t.Surfaces.Surface) {
+    Surface(shape = RoundedCornerShape(DesignTokens.Shape.CardRadius), color = DesignTokens.Surfaces.Surface) {
         Column(Modifier.padding(16.dp)) {
             SectionHeader("Backends", "Execution runtimes on device")
             Spacer(Modifier.height(8.dp))
@@ -268,18 +268,18 @@ private data class BackendRow(val name: String, val active: Boolean, val note: S
 @Composable
 private fun BackendGroup(title: String, rows: List<BackendRow>) {
     val t = DesignTokens
-    Text(title, style = MaterialTheme.typography.labelMedium, color = t.Chrome.TextSecondary,
+    Text(title, style = MaterialTheme.typography.labelMedium, color = DesignTokens.Chrome.TextSecondary,
         modifier = Modifier.padding(vertical = 4.dp))
     rows.forEach { row ->
         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).background(
-                if (row.active) t.Status.Ok else t.Chrome.Outline, CircleShape))
+                if (row.active) DesignTokens.Status.Ok else DesignTokens.Chrome.Outline, CircleShape))
             Spacer(Modifier.width(8.dp))
             Text(row.name, style = MaterialTheme.typography.bodyMedium,
                 fontFamily = FontFamily.Monospace,
-                color = if (row.active) t.Chrome.Text else t.Chrome.TextFaint)
+                color = if (row.active) DesignTokens.Chrome.Text else DesignTokens.Chrome.TextFaint)
             Spacer(Modifier.weight(1f))
-            Text(row.note, style = MaterialTheme.typography.labelSmall, color = t.Chrome.TextFaint)
+            Text(row.note, style = MaterialTheme.typography.labelSmall, color = DesignTokens.Chrome.TextFaint)
         }
     }
 }

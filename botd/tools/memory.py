@@ -99,16 +99,17 @@ class MemoryTools:
         query: str,
         target: Optional[str] = None,
         limit: int = 10,
+        targets: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Case-insensitive line search over the memory docs.
 
-        ``target`` restricts the search to one doc; when omitted all three
-        docs are searched.
+        ``target`` restricts the search to one doc, ``targets`` to several;
+        when both are omitted all three docs are searched.
         """
-        targets = (target,) if target else MEMORY_DOCS
+        selected = tuple(targets) if targets else ((target,) if target else MEMORY_DOCS)
         rx = re.compile(re.escape(query), re.IGNORECASE)
         matches: List[Dict[str, Any]] = []
-        for name in targets:
+        for name in selected:
             if name not in MEMORY_DOCS:
                 continue
             path = self._home / "bots" / bot_name / name

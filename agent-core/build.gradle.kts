@@ -31,7 +31,9 @@ android {
 dependencies {
     // Ktor for the cloud LLM client (no local LLM, OpenAI-compatible only)
     val ktor = "3.0.3"
+    api("io.ktor:ktor-client-core:$ktor")
     api("io.ktor:ktor-client-android:$ktor")
+    api("io.ktor:ktor-client-logging:$ktor")
     api("io.ktor:ktor-client-content-negotiation:$ktor")
     api("io.ktor:ktor-serialization-kotlinx-json:$ktor")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")

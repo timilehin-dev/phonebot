@@ -2,18 +2,17 @@ package com.phonebot.core
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.engine.android.AndroidEngine
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.expectSuccess
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
-import io.ktor.serialization.json
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.Json
@@ -61,15 +60,14 @@ class LlmClient(
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    private val http = HttpClient(AndroidEngine()) {
+    // No explicit engine factory: Ktor discovers the Android engine from
+    // ktor-client-android on the classpath, which keeps this module portable.
+    private val http = HttpClient {
         install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-        install(expectSuccess)
         install(Logging) {
+            // INFO logs method/URL/status only, never header values, so the
+            // Authorization bearer key cannot reach logcat.
             level = LogLevel.INFO
-            // The API key rides in the Authorization header; keep it out of logs.
-            sanitizeRequest { request ->
-                request.filterHeaders { name -> name.lowercase() != "authorization" }
-            }
         }
     }
 
@@ -89,15 +87,16 @@ class LlmClient(
         tools: List<JsonObject>? = null,
         temperature: Double? = null,
     ): Flow<LlmChunk> = flow {
-        val resp = http.post("$baseUrl/chat/completions") {
-            headers {
-                baseHeaders().forEach { (k, v) -> append(k, v) }
-                append(HttpHeaders.Accept, "text/event-stream")
-            }
+        val response = http.post("$baseUrl/chat/completions") {
+            baseHeaders().forEach { (k, v) -> header(k, v) }
+            header(HttpHeaders.Accept, "text/event-stream")
             contentType(ContentType.Application.Json)
-            setBody(chatBody(stream = true, temperature = temperature))
-        }.bodyAsSse()
-        resp.collect { emit(it) }
+            setBody(chatBody(stream = true, temperature = temperature, messages = messages, tools = tools))
+        }
+        if (response.status.value >= 400) {
+            throw LlmHttpException(response.status.value, "LLM request failed: ${response.status}")
+        }
+        response.bodyAsSse().collect { emit(it) }
     }
 
     /**
@@ -110,15 +109,18 @@ class LlmClient(
         tools: List<JsonObject>? = null,
         temperature: Double? = null,
     ): LlmResult {
-        val resp = http.post("$baseUrl/chat/completions") {
-            headers {
-                baseHeaders().forEach { (k, v) -> append(k, v) }
-            }
+        val response = http.post("$baseUrl/chat/completions") {
+            baseHeaders().forEach { (k, v) -> header(k, v) }
             contentType(ContentType.Application.Json)
-            setBody(chatBody(stream = false, temperature = temperature))
-        }.bodyAsJsonObject()
+            setBody(chatBody(stream = false, temperature = temperature, messages = messages, tools = tools))
+        }
+        if (response.status.value >= 400) {
+            throw LlmHttpException(response.status.value, "LLM request failed: ${response.status}")
+        }
+        val resp = response.bodyAsJsonObject()
 
-        val choice = resp["choices"]?.jsonObject?.get("0")?.jsonObject
+        // ``choices`` is a JSON array, not an object keyed by index.
+        val choice = resp["choices"]?.jsonArray?.firstOrNull()?.jsonObject
             ?: return LlmResult(content = "", finishReason = "no_choice")
         val message = choice["message"]?.jsonObject ?: return LlmResult(content = "")
         val toolCalls = message["tool_calls"]?.jsonArray?.map { tc ->
@@ -134,14 +136,19 @@ class LlmClient(
             v.jsonPrimitive.content.toIntOrNull() ?: 0
         } ?: emptyMap()
         return LlmResult(
-            content = message["content"]?.jsonPrimitive?.contentOrNull ?: "",
+            content = message["content"]?.jsonPrimitive?.contentText ?: "",
             toolCalls = toolCalls,
-            finishReason = choice["finish_reason"]?.jsonPrimitive?.contentOrNull,
+            finishReason = choice["finish_reason"]?.jsonPrimitive?.contentText,
             usage = usage,
         )
     }
 
-    private fun chatBody(stream: Boolean, temperature: Double?): JsonObject = buildJsonObject {
+    private fun chatBody(
+        stream: Boolean,
+        temperature: Double?,
+        messages: List<LlmMessage>,
+        tools: List<JsonObject>?,
+    ): JsonObject = buildJsonObject {
         put("model", model)
         put("stream", stream)
         if (temperature != null) put("temperature", temperature)
@@ -204,7 +211,7 @@ object LlmMessageCodec {
             val obj = el.jsonObject
             LlmMessage(
                 role = obj["role"]?.jsonPrimitive?.content ?: "user",
-                content = obj["content"]?.jsonPrimitive?.contentOrNull ?: "",
+                content = obj["content"]?.jsonPrimitive?.contentText ?: "",
                 toolCalls = obj["tool_calls"]?.jsonArray?.map { tc ->
                     val o = tc.jsonObject
                     val fn = o["function"]?.jsonObject
@@ -214,7 +221,7 @@ object LlmMessageCodec {
                         arguments = fn?.get("arguments")?.jsonPrimitive?.content ?: "{}",
                     )
                 }.orEmpty(),
-                toolCallId = obj["tool_call_id"]?.jsonPrimitive?.contentOrNull,
+                toolCallId = obj["tool_call_id"]?.jsonPrimitive?.contentText,
             )
         }
     }
@@ -269,8 +276,11 @@ object LlmMessageCodec {
     }
 }
 
-private val JsonElement.contentOrNull
-    get() = (this as? JsonPrimitive)?.contentOrNull
+// Named differently from kotlinx's JsonPrimitive.contentText on purpose:
+// a same-named extension on JsonElement makes the compiler resolve the
+// property recursively ("Type checking has run into a recursive problem").
+private val JsonElement.contentText: String?
+    get() = (this as? JsonPrimitive)?.content
 
 // ---------------------------------------------------------------------------
 // SSE / JSON body decoding
@@ -293,20 +303,20 @@ private suspend fun HttpResponse.bodyAsSse(): Flow<LlmChunk> {
         if (line.isEmpty() || !line.startsWith("data:")) continue
         val payload = line.removePrefix("data:").trim()
         if (payload == "[DONE]") continue
-        val obj = runCatching { json.parseToJsonElement(payload) }.getOrNull() ?: continue
+        val obj = runCatching { json.parseToJsonElement(payload) }.getOrNull() as? JsonObject ?: continue
         val choice = (obj["choices"] as? JsonArray)?.firstOrNull()?.let { it as? JsonObject } ?: continue
         val delta = choice["delta"]?.jsonObject ?: continue
 
-        val textDelta = delta["content"]?.jsonPrimitive?.contentOrNull
+        val textDelta = delta["content"]?.jsonPrimitive?.contentText
         if (!textDelta.isNullOrEmpty()) chunks += LlmChunk.Delta(textDelta)
 
         (delta["tool_calls"] as? JsonArray)?.forEach { tcEl ->
             val tc = (tcEl as? JsonObject) ?: return@forEach
-            val idx = tc["index"]?.jsonPrimitive?.content.toIntOrNull() ?: 0
+            val idx = tc["index"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
             val id = tc["id"]?.jsonPrimitive?.content
             val fn = tc["function"]?.jsonObject
-            val nameDelta = fn?.get("name")?.jsonPrimitive?.contentOrNull
-            val argsDelta = fn?.get("arguments")?.jsonPrimitive?.contentOrNull
+            val nameDelta = fn?.get("name")?.jsonPrimitive?.contentText
+            val argsDelta = fn?.get("arguments")?.jsonPrimitive?.contentText
             if (!nameDelta.isNullOrEmpty() || !argsDelta.isNullOrEmpty()) {
                 val prev = toolParts[idx]
                 toolParts[idx] = ToolCall(
@@ -317,7 +327,7 @@ private suspend fun HttpResponse.bodyAsSse(): Flow<LlmChunk> {
             }
         }
 
-        val finish = choice["finish_reason"]?.jsonPrimitive?.contentOrNull
+        val finish = choice["finish_reason"]?.jsonPrimitive?.contentText
         val usage = obj["usage"]?.jsonObject?.mapValues { (_, v) ->
             v.jsonPrimitive.content.toIntOrNull() ?: 0
         }

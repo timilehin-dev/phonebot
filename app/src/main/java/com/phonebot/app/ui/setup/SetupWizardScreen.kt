@@ -1,6 +1,7 @@
 package com.phonebot.app.ui.setup
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,13 +17,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -47,44 +44,32 @@ import com.phonebot.design.DesignTokens
  *   4. Register boot
  *   5. Enable wake-lock
  *   6. Connect LLM
+ *   7. Onboard bot
  *
  * Phase 1: the state machine in :wizard/SetupWizard.kt drives the step
- * results; this screen renders the node graph. No live Termux yet.
+ * results; this screen renders the node graph.
  */
 @Composable
 fun SetupWizardScreen(onBack: () -> Unit = {}) {
     val t = DesignTokens
 
     // Phase 1: hardcoded step states; replaced by wizard.WizardState in Phase 2.
-    data class Step(
-        val label: String,
-        val detail: String,
-        val state: StepState,
-        val hue: Color,
-    )
-
-    enum class StepState(val color: Color) {
-        Done(t.Status.Ok),
-        Active(t.Status.Working),
-        Failed(t.Status.Critical),
-        Pending(t.Chrome.TextFaint),
-    }
-
     val steps = remember {
         listOf(
-            Step("Install Termux", "F-Droid · com.termux", StepState.Done, t.BotHues.H0),
-            Step("Install Termux:API", "com.termux.api", StepState.Done, t.BotHues.H1),
-            Step("Deploy botd", "git clone → make install", StepState.Failed, t.BotHues.H2),
-            Step("Register boot", "Termux:Boot intent", StepState.Pending, t.BotHues.H3),
-            Step("Enable wake-lock", "Termux:API wake-lock", StepState.Pending, t.BotHues.H4),
-            Step("Connect LLM", "API key → Keystore", StepState.Pending, t.BotHues.H5),
+            WizardStep("Install Termux", "F-Droid · com.termux", WizardStepState.Done, DesignTokens.BotHues.H0),
+            WizardStep("Install Termux:API", "com.termux.api", WizardStepState.Done, DesignTokens.BotHues.H1),
+            WizardStep("Deploy botd", "payload → ~/phonebot", WizardStepState.Failed, DesignTokens.BotHues.H2),
+            WizardStep("Register boot", "Termux:Boot intent", WizardStepState.Pending, DesignTokens.BotHues.H3),
+            WizardStep("Enable wake-lock", "termux-wake-lock", WizardStepState.Pending, DesignTokens.BotHues.H4),
+            WizardStep("Connect LLM", "API key → Keystore", WizardStepState.Pending, DesignTokens.BotHues.H5),
+            WizardStep("Onboard bot", "first bot + chief", WizardStepState.Pending, DesignTokens.BotHues.H0),
         )
     }
 
     Column(
         Modifier
             .fillMaxSize()
-            .padding(horizontal = t.Density.ScreenPad.dp),
+            .padding(horizontal = DesignTokens.Density.ScreenPad.dp),
     ) {
         Text("Setup", style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(vertical = 12.dp))
@@ -104,6 +89,22 @@ fun SetupWizardScreen(onBack: () -> Unit = {}) {
     }
 }
 
+/** One wizard step as rendered by the node graph. */
+private data class WizardStep(
+    val label: String,
+    val detail: String,
+    val state: WizardStepState,
+    val hue: Color,
+)
+
+/** Visual state of a wizard node. */
+private enum class WizardStepState(val color: Color) {
+    Done(DesignTokens.Status.Ok),
+    Active(DesignTokens.Status.Working),
+    Failed(DesignTokens.Status.Critical),
+    Pending(DesignTokens.Chrome.TextFaint),
+}
+
 /**
  * Single wizard node:
  *   - circle (state color) with state icon
@@ -111,9 +112,9 @@ fun SetupWizardScreen(onBack: () -> Unit = {}) {
  *   - vertical connector line to the next node
  */
 @Composable
-private fun WizardNode(step: SetupWizardScreen.Step, isLast: Boolean, onReRun: () -> Unit) {
+private fun WizardNode(step: WizardStep, isLast: Boolean, onReRun: () -> Unit) {
     val t = DesignTokens
-    val isFailed = step.state == SetupWizardScreen.StepState.Failed
+    val isFailed = step.state == WizardStepState.Failed
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         // Circle + connector column
@@ -124,7 +125,10 @@ private fun WizardNode(step: SetupWizardScreen.Step, isLast: Boolean, onReRun: (
             Box(
                 Modifier
                     .size(28.dp)
-                    .background(step.state.color.copy(alpha = if (isFailed) 1f else 0.25f), CircleShape)
+                    .background(
+                        step.state.color.copy(alpha = if (isFailed) 1f else 0.25f),
+                        CircleShape,
+                    )
                     .border(
                         width = 2.dp,
                         color = step.state.color,
@@ -133,13 +137,13 @@ private fun WizardNode(step: SetupWizardScreen.Step, isLast: Boolean, onReRun: (
                 contentAlignment = Alignment.Center,
             ) {
                 when (step.state) {
-                    SetupWizardScreen.StepState.Done -> Text("✓", color = t.Surfaces.Background,
+                    WizardStepState.Done -> Text("✓", color = DesignTokens.Surfaces.Background,
                         style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                    SetupWizardScreen.StepState.Active -> Text("●", color = step.hue,
+                    WizardStepState.Active -> Text("●", color = step.hue,
                         style = MaterialTheme.typography.labelMedium)
-                    SetupWizardScreen.StepState.Failed -> Text("✗", color = t.Surfaces.Background,
+                    WizardStepState.Failed -> Text("✗", color = DesignTokens.Surfaces.Background,
                         style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                    SetupWizardScreen.StepState.Pending -> Text("·", color = t.Chrome.TextFaint,
+                    WizardStepState.Pending -> Text("·", color = DesignTokens.Chrome.TextFaint,
                         style = MaterialTheme.typography.labelMedium)
                 }
             }
@@ -150,7 +154,7 @@ private fun WizardNode(step: SetupWizardScreen.Step, isLast: Boolean, onReRun: (
                     Modifier
                         .width(2.dp)
                         .height(48.dp)
-                        .background(t.Chrome.OutlineSoft),
+                        .background(DesignTokens.Chrome.OutlineSoft),
                 )
             }
         }
@@ -162,19 +166,19 @@ private fun WizardNode(step: SetupWizardScreen.Step, isLast: Boolean, onReRun: (
                 Text(
                     step.label,
                     style = MaterialTheme.typography.titleSmall,
-                    color = if (isFailed) t.Status.Critical else t.Chrome.Text,
+                    color = if (isFailed) DesignTokens.Status.Critical else DesignTokens.Chrome.Text,
                     fontWeight = if (isFailed) FontWeight.Bold else FontWeight.Normal,
                 )
                 if (isFailed) {
                     Spacer(Modifier.width(8.dp))
                     Text("tap to retry", style = MaterialTheme.typography.labelSmall,
-                        color = t.Status.Critical, fontFamily = FontFamily.Monospace)
+                        color = DesignTokens.Status.Critical, fontFamily = FontFamily.Monospace)
                 }
             }
             Text(
                 step.detail,
                 style = MaterialTheme.typography.labelSmall,
-                color = t.Chrome.TextFaint,
+                color = DesignTokens.Chrome.TextFaint,
                 fontFamily = FontFamily.Monospace,
             )
         }

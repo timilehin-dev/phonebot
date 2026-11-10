@@ -71,7 +71,7 @@ class BotdSshClient(
         channel.setCommand(command)
         val out = ByteArrayOutputStream()
         val err = ByteArrayOutputStream()
-        channel.setOutStream(out)
+        channel.setOutputStream(out)
         channel.setErrStream(err)
         try {
             session.connect(connectTimeoutMs)
@@ -82,7 +82,7 @@ class BotdSshClient(
                 Thread.sleep(100)
             }
             val exit = if (channel.isClosed) channel.exitStatus else -1
-            return ExecResult(exit, out.toString(Charsets.UTF_8), err.toString(Charsets.UTF_8))
+            return ExecResult(exit, out.toString(Charsets.UTF_8.name()), err.toString(Charsets.UTF_8.name()))
         } finally {
             runCatching { channel.disconnect() }
             runCatching { session.disconnect() }
@@ -98,16 +98,16 @@ class BotdSshClient(
     private fun newSession(): Session {
         val jsch = JSch()
         when (val a = auth) {
-            is SshAuth.Key -> jsch.addIdentity(null, a.privateKeyPem.encodeToByteArray())
-            is SshAuth.Password -> { /* set on the session below */ }
+            is SshAuth.Key ->
+                jsch.addIdentity("phonebot", a.privateKeyPem.encodeToByteArray())
+            is SshAuth.Password -> Unit // set on the session below
         }
         val session = jsch.getSession(user, host, port)
-        (auth as? SshAuth.Password)?.let { session.password = it.password }
+        (auth as? SshAuth.Password)?.let { session.setPassword(it.password) }
         // Termux sshd: no host-key verification for a loopback-only daemon.
         session.setConfig("StrictHostKeyChecking", "no")
         session.setConfig("UserKnownHostsFile", "/dev/null")
         session.setConfig("PreferredAuthentications", "publickey,keyboard-interactive,password")
-        session.connectTimeout = connectTimeoutMs
         return session
     }
 

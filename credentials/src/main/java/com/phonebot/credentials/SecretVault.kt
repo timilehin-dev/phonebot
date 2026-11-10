@@ -3,42 +3,47 @@ package com.phonebot.credentials
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import android.util.Base64
+import java.io.File
 import java.security.KeyStore
-import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-import java.util.UUID
-import android.util.Base64
 
 /**
  * SecretVault — Android Keystore-backed secret storage.
  *
  * Design:
- *  - Each secret is encrypted with a per-secret AES-GCM key (256-bit)
- *    wrapped by the Keystore master key (non-exportable, hardware-backed
- *    when the device has a TEE/StrongBox).
- *  - Encrypted blobs are persisted in a plain-SharedPreferences-free
- *    internal file store (no Room in Phase 1 — the vault is its own
- *    file: data/secretvault.bin).
- *  - [retrieve] returns a [SecretHandle] — the raw value is never exposed
- *    to the UI layer. Handles resolve lazily when an IPC client (LlmClient,
- *    MCP connection) needs the bytes.
+ *  - One non-exportable AES-256-GCM master key lives in the Android
+ *    Keystore (hardware-backed where a TEE/StrongBox exists).
+ *  - Each secret is encrypted with that master key and persisted as
+ *    base64(iv) + base64(ciphertext) in `filesDir/secretvault.bin`, which
+ *    is restricted to 0600. Values are never written in plaintext and
+ *    never logged.
+ *  - [retrieve] returns a [SecretHandle]; the raw value is resolved only
+ *    when a caller (LlmClient, MCP connection) actually needs it.
  *
  * Used by:
  *  - [com.phonebot.core.LlmClient] for the LLM API key
- *  - MCP connection secrets (Phase 2)
+ *  - MCP connection secrets (Phase 3)
  */
 class SecretVault(private val context: Context) {
 
-    private val keyStore: KeyStore = KeyStore.getInstance(AndroidKeyStore).apply {
+    private val keyStore: KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply {
         load(null)
     }
     private val masterKeyAlias = "com.phonebot.master"
 
+    private companion object {
+        /** Android Keystore provider name (not exported as a symbol by the JDK API). */
+        const val ANDROID_KEYSTORE = "AndroidKeyStore"
+    }
+    private val vaultFile: File = File(context.filesDir, "secretvault.bin")
+
     init {
         ensureMasterKey()
+        loadFromDisk()
     }
 
     // ------------------------------------------------------------------
@@ -47,20 +52,28 @@ class SecretVault(private val context: Context) {
 
     private fun ensureMasterKey() {
         if (keyStore.containsAlias(masterKeyAlias)) return
-        val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, AndroidKeyStore)
+        val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
         gen.init(
             KeyGenParameterSpec.Builder(
                 masterKeyAlias,
                 KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
             )
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setKeySizes(256)
-                .setCipherModes(KeyProperties.CIPHER_MODE_NO_PADDING)
-                .setRandomizedEncryptionIVsEnabled(true)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .setRandomizedEncryptionRequired(true)
                 .build(),
         )
-        keyStore.setKey(masterKeyAlias, null, gen.generateKey())
+        // Generating under AndroidKeyStore stores the key; no setEntry needed.
+        gen.generateKey()
     }
+
+    private fun masterKey(): SecretKey =
+        keyStore.getKey(masterKeyAlias, null) as SecretKey
+
+    // ------------------------------------------------------------------
+    // Public API
+    // ------------------------------------------------------------------
 
     /**
      * Encrypt + store a secret. [scope] is the owning subsystem
@@ -68,17 +81,21 @@ class SecretVault(private val context: Context) {
      */
     fun store(name: String, value: String, scope: String = "default") {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        val master = keyStore.getKey(masterKeyAlias, null) as SecretKey
-        cipher.init(Cipher.ENCRYPT_MODE, master)
-        val iv = cipher.iv
-        val ct = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
-        persistEntry(name, scope, iv, ct)
+        cipher.init(Cipher.ENCRYPT_MODE, masterKey())
+        val ciphertext = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+        entries[entryKey(name, scope)] = VaultEntry(
+            name = name,
+            scope = scope,
+            iv = cipher.iv,
+            ciphertext = ciphertext,
+            lastUsed = System.currentTimeMillis(),
+        )
+        persistToDisk()
     }
 
     /**
      * Return a handle for the named secret. The raw value is resolved
-     * lazily via [SecretHandle.value] and is never stored in memory
-     * beyond the resolve call site's scope.
+     * lazily and never stored in the UI layer.
      */
     fun retrieve(name: String, scope: String = "default"): SecretHandle {
         val entry = loadEntry(name, scope)
@@ -87,52 +104,109 @@ class SecretVault(private val context: Context) {
             name = name,
             scope = scope,
             lastUsed = entry.lastUsed,
-            resolver = { entry.decrypt() },
+            resolver = { decrypt(entry) },
         )
     }
 
     /** List stored secrets: name + scope + last-used timestamp. No values. */
-    fun list(): List<SecretMeta> = persistedEntries().map { it.toMeta() }
+    fun list(): List<SecretMeta> = entries.values.map { it.toMeta() }
 
-    /** Delete a secret's encrypted blob. */
+    /** Delete a secret's encrypted blob (and persist the removal). */
     fun revoke(name: String, scope: String = "default") {
-        // Phase 1: remove from the in-memory cache; disk purge follows.
         entries.remove(entryKey(name, scope))
+        persistToDisk()
     }
 
     // ------------------------------------------------------------------
-    // Persistence (Phase 1: in-memory + TODO disk)
+    // Crypto
+    // ------------------------------------------------------------------
+
+    private fun decrypt(entry: VaultEntry): String {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(
+            Cipher.DECRYPT_MODE,
+            masterKey(),
+            GCMParameterSpec(128, entry.iv),
+        )
+        return String(cipher.doFinal(entry.ciphertext), Charsets.UTF_8)
+    }
+
+    // ------------------------------------------------------------------
+    // Persistence: one line per secret, tab-separated base64 fields
     // ------------------------------------------------------------------
 
     private class VaultEntry(
+        val name: String,
+        val scope: String,
         val iv: ByteArray,
         val ciphertext: ByteArray,
         var lastUsed: Long,
     ) {
-        /** Decrypt using the same master key the entry was encrypted under. */
-        fun decrypt(): String {
-            // The VaultEntry holds the AES-GCM ciphertext + iv; decryption
-            // happens through a second key unwrap in Phase 2. For Phase 1
-            // the resolver just returns the value it was stored with (see below).
-            return String(ciphertext, Charsets.UTF_8)
-        }
-        fun toMeta() = SecretMeta(name = "", scope = "", lastUsed = lastUsed)
+        fun toMeta() = SecretMeta(name = name, scope = scope, lastUsed = lastUsed)
     }
 
-    private val entries = mutableMapOf<String, VaultEntry>()
+    private val entries = LinkedHashMap<String, VaultEntry>()
+
     private fun entryKey(name: String, scope: String) = "$scope/$name"
 
     private fun loadEntry(name: String, scope: String): VaultEntry? =
         entries[entryKey(name, scope)]?.also { it.lastUsed = System.currentTimeMillis() }
 
-    private fun persistEntry(name: String, scope: String, iv: ByteArray, ct: ByteArray) {
-        entries[entryKey(name, scope)] = VaultEntry(iv, ct, System.currentTimeMillis())
-        // TODO(Phase 2): encrypt the per-secret key with the master, write the
-        //  (iv, ct, lastUsed) tuple to data/secretvault.bin with 0600 perms.
-        //  The master key itself never leaves the Keystore.
+    private fun loadFromDisk() {
+        if (!vaultFile.exists()) return
+        runCatching {
+            vaultFile.forEachLine { line ->
+                if (line.isBlank()) return@forEachLine
+                val parts = line.split('\t')
+                if (parts.size != 5) return@forEachLine
+                val key = parts[0]
+                val slash = key.indexOf('/')
+                if (slash <= 0) return@forEachLine
+                entries[key] = VaultEntry(
+                    name = key.substring(slash + 1),
+                    scope = key.substring(0, slash),
+                    iv = Base64.decode(parts[1], Base64.NO_WRAP),
+                    ciphertext = Base64.decode(parts[2], Base64.NO_WRAP),
+                    lastUsed = parts[3].toLongOrNull() ?: 0L,
+                )
+            }
+        }.onFailure {
+            // A corrupt vault must not crash the app; start empty rather than
+            // risk returning undecryptable secrets.
+            entries.clear()
+        }
     }
 
-    private fun persistedEntries(): List<VaultEntry> = entries.values.toList()
+    private fun persistToDisk() {
+        val tmp = File(context.filesDir, "secretvault.bin.tmp")
+        val body = buildString {
+            entries.forEach { (key, e) ->
+                append(key).append('\t')
+                append(Base64.encodeToString(e.iv, Base64.NO_WRAP)).append('\t')
+                append(Base64.encodeToString(e.ciphertext, Base64.NO_WRAP)).append('\t')
+                append(e.lastUsed).append('\t')
+                append(e.name).append('\n')
+            }
+        }
+        tmp.writeText(body, Charsets.UTF_8)
+        restrictPermissions(tmp)
+        if (!tmp.renameTo(vaultFile)) {
+            vaultFile.writeText(body, Charsets.UTF_8)
+            restrictPermissions(vaultFile)
+            tmp.delete()
+        }
+    }
+
+    /** Best-effort 0600: owner read/write only. */
+    private fun restrictPermissions(file: File) {
+        runCatching {
+            file.setReadable(false, false)
+            file.setWritable(false, false)
+            file.setExecutable(false, false)
+            file.setReadable(true, true)
+            file.setWritable(true, true)
+        }
+    }
 }
 
 /** Opaque handle — UI layers never see the raw value. */

@@ -58,6 +58,9 @@ case "$cmd" in
     python3 test/protocol_conformance.py
     python3 test/tools_dispatch_check.py
     python3 test/mock_openai_check.py
+    python3 test/cli_roundtrip_check.py
+    python3 test/regression_check.py
+    python3 -m botd.main --smoketest-llm --llm-mode fake
     echo "botd test battery complete"
     ;;
   clean)

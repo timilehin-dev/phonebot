@@ -50,15 +50,15 @@ fun RoutinesScreen() {
     val t = DesignTokens
 
     LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = t.Density.ScreenPad.dp),
-        verticalArrangement = Arrangement.spacedBy(t.Density.CardGap.dp),
-        padding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 96.dp),
+        Modifier.fillMaxSize().padding(horizontal = DesignTokens.Density.ScreenPad.dp),
+        verticalArrangement = Arrangement.spacedBy(DesignTokens.Density.CardGap.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 96.dp),
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Routines", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.weight(1f))
-                Text("4 active", style = MaterialTheme.typography.labelSmall, color = t.Chrome.TextFaint)
+                Text("4 active", style = MaterialTheme.typography.labelSmall, color = DesignTokens.Chrome.TextFaint)
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -123,8 +123,8 @@ private fun RoutineCard(r: Routine) {
     }
 
     Surface(
-        shape = RoundedCornerShape(t.Shape.CardRadius),
-        color = t.Surfaces.Surface,
+        shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
+        color = DesignTokens.Surfaces.Surface,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -138,16 +138,16 @@ private fun RoutineCard(r: Routine) {
             }
 
             // Row 2: NL description
-            Text(r.description, style = MaterialTheme.typography.bodySmall, color = t.Chrome.TextSecondary)
+            Text(r.description, style = MaterialTheme.typography.bodySmall, color = DesignTokens.Chrome.TextSecondary)
 
             // Row 3: mono cron expr
-            Surface(shape = RoundedCornerShape(4.dp), color = t.Surfaces.SurfaceHigh) {
+            Surface(shape = RoundedCornerShape(4.dp), color = DesignTokens.Surfaces.SurfaceHigh) {
                 Text(
                     " ${r.cronExpr} ",
                     Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = FontFamily.Monospace,
-                    color = t.Chrome.Text,
+                    color = DesignTokens.Chrome.Text,
                 )
             }
 
@@ -156,7 +156,7 @@ private fun RoutineCard(r: Routine) {
                 Text(
                     "next in ${formatCountdown(secsLeft)}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = t.Status.Working,
+                    color = DesignTokens.Status.Working,
                     fontFamily = FontFamily.Monospace,
                 )
                 Spacer(Modifier.weight(1f))
@@ -170,14 +170,14 @@ private fun RoutineCard(r: Routine) {
 private fun IdempotencyChip(idempotent: Boolean) {
     val t = DesignTokens
     Surface(
-        shape = RoundedCornerShape(t.Shape.ChipRadius),
-        color = if (idempotent) t.Status.Ok.copy(alpha = 0.15f) else t.Status.Critical.copy(alpha = 0.15f),
+        shape = RoundedCornerShape(DesignTokens.Shape.ChipRadius),
+        color = if (idempotent) DesignTokens.Status.Ok.copy(alpha = 0.15f) else DesignTokens.Status.Critical.copy(alpha = 0.15f),
     ) {
         Text(
             if (idempotent) " idempotent " else " destructive ",
             Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall,
-            color = if (idempotent) t.Status.Ok else t.Status.Critical,
+            color = if (idempotent) DesignTokens.Status.Ok else DesignTokens.Status.Critical,
             fontWeight = FontWeight.Bold,
         )
     }
@@ -189,13 +189,13 @@ private fun CatchUpChip(status: String) {
     val isOk = status == "0 missed" || status == "never missed"
     Surface(
         shape = RoundedCornerShape(4.dp),
-        color = (if (isOk) t.Status.Ok else t.Status.Warn).copy(alpha = 0.12f),
+        color = (if (isOk) DesignTokens.Status.Ok else DesignTokens.Status.Warn).copy(alpha = 0.12f),
     ) {
         Text(
             status,
             Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall,
-            color = if (isOk) t.Status.Ok else t.Status.Warn,
+            color = if (isOk) DesignTokens.Status.Ok else DesignTokens.Status.Warn,
         )
     }
 }

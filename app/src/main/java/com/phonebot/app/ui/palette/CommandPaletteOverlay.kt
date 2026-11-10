@@ -78,10 +78,10 @@ fun CommandPaletteOverlay(onDismiss: () -> Unit) {
             Surface(
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp,
                     bottomStart = 0.dp, bottomEnd = 0.dp),
-                color = t.Surfaces.Glass,
+                color = DesignTokens.Surfaces.Glass,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = t.Density.ScreenPad.dp)
+                    .padding(horizontal = DesignTokens.Density.ScreenPad.dp)
                     .padding(top = 16.dp),
                 tonalElevation = 0.dp,
             ) {
@@ -92,11 +92,11 @@ fun CommandPaletteOverlay(onDismiss: () -> Unit) {
                         placeholder = {
                             Text("command · @bot · #routine",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = t.Chrome.TextFaint)
+                                color = DesignTokens.Chrome.TextFaint)
                         },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(t.Shape.InputRadius),
+                        shape = RoundedCornerShape(DesignTokens.Shape.InputRadius),
                     )
                     // Filtered action list
                     Column(
@@ -108,10 +108,10 @@ fun CommandPaletteOverlay(onDismiss: () -> Unit) {
                         if (filtered.isEmpty()) {
                             Text("No matches", Modifier.padding(12.dp),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = t.Chrome.TextFaint)
+                                color = DesignTokens.Chrome.TextFaint)
                         } else {
                             filtered.forEach { action ->
-                                PaletteActionRow(action, t, onClick = {
+                                PaletteActionRow(action, onClick = {
                                     // TODO: route to bot / surface (Phase 2)
                                     onDismiss()
                                 })
@@ -147,7 +147,8 @@ private val placeholderActions = listOf(
 )
 
 @Composable
-private fun PaletteActionRow(action: PaletteAction, t: com.phonebot.design.DesignTokens, onClick: () -> Unit) {
+private fun PaletteActionRow(action: PaletteAction, onClick: () -> Unit) {
+    val t = DesignTokens
     Surface(shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Row(
             Modifier
@@ -160,14 +161,14 @@ private fun PaletteActionRow(action: PaletteAction, t: com.phonebot.design.Desig
             Text(
                 action.label,
                 style = MaterialTheme.typography.bodyMedium,
-                color = t.Chrome.Text,
+                color = DesignTokens.Chrome.Text,
             )
             Spacer(Modifier.weight(1f))
             // Target chip: bot name in its hue, or surface name in faint chrome
             Surface(
-                shape = RoundedCornerShape(t.Shape.ChipRadius),
-                color = if (action.targetHue != t.Chrome.TextFaint)
-                    action.targetHue.copy(alpha = 0.15f) else t.Surfaces.SurfaceHigh,
+                shape = RoundedCornerShape(DesignTokens.Shape.ChipRadius),
+                color = if (action.targetHue != DesignTokens.Chrome.TextFaint)
+                    action.targetHue.copy(alpha = 0.15f) else DesignTokens.Surfaces.SurfaceHigh,
             ) {
                 Text(
                     " ${action.target} ",

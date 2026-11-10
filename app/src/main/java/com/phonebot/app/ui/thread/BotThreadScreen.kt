@@ -1,6 +1,7 @@
 package com.phonebot.app.ui.thread
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,12 +57,12 @@ fun BotThreadScreen(botId: String, onBack: () -> Unit) {
     var currentBotId by remember(botId) { mutableStateOf(botId) }
 
     Scaffold(
-        containerColor = t.Surfaces.Background,
+        containerColor = DesignTokens.Surfaces.Background,
         topBar = {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = t.Density.ScreenPad.dp, vertical = 10.dp),
+                    .padding(horizontal = DesignTokens.Density.ScreenPad.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack) {
@@ -79,18 +80,18 @@ fun BotThreadScreen(botId: String, onBack: () -> Unit) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = t.Density.ScreenPad.dp, vertical = 8.dp),
+                    .padding(horizontal = DesignTokens.Density.ScreenPad.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 val crew = listOf(
-                    "atlas" to t.BotHues.H0, "sable" to t.BotHues.H1,
-                    "vex" to t.BotHues.H2, "onyx" to t.BotHues.H3,
+                    "atlas" to DesignTokens.BotHues.H0, "sable" to DesignTokens.BotHues.H1,
+                    "vex" to DesignTokens.BotHues.H2, "onyx" to DesignTokens.BotHues.H3,
                 )
                 crew.forEach { (id, hue) ->
                     val isSel = id == currentBotId
                     Surface(
-                        shape = RoundedCornerShape(t.Shape.ChipRadius),
-                        color = if (isSel) t.Surfaces.SurfaceHigh else t.Surfaces.SurfaceContainer,
+                        shape = RoundedCornerShape(DesignTokens.Shape.ChipRadius),
+                        color = if (isSel) DesignTokens.Surfaces.SurfaceHigh else DesignTokens.Surfaces.SurfaceContainer,
                     ) {
                         Row(
                             Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -99,7 +100,7 @@ fun BotThreadScreen(botId: String, onBack: () -> Unit) {
                             Box(Modifier.size(6.dp).background(hue, CircleShape))
                             Spacer(Modifier.width(5.dp))
                             Text(id, style = MaterialTheme.typography.labelMedium,
-                                color = if (isSel) t.Chrome.Text else t.Chrome.TextSecondary)
+                                color = if (isSel) DesignTokens.Chrome.Text else DesignTokens.Chrome.TextSecondary)
                         }
                     }
                 }
@@ -109,16 +110,16 @@ fun BotThreadScreen(botId: String, onBack: () -> Unit) {
 
             // Message list
             LazyColumn(
-                Modifier.fillMaxSize().padding(horizontal = t.Density.ScreenPad.dp),
-                verticalArrangement = Arrangement.spacedBy(t.Density.CardGap.dp),
-                padding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
+                Modifier.fillMaxSize().padding(horizontal = DesignTokens.Density.ScreenPad.dp),
+                verticalArrangement = Arrangement.spacedBy(DesignTokens.Density.CardGap.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
             ) {
                 items(placeholderMessages) { msg ->
                     when (msg.type) {
                         MsgType.Handoff -> HandoffConnector(msg)
-                        MsgType.Trace -> TraceChipBlock(msg, currentBotHue)
+                        MsgType.Trace -> TraceChipBlock(msg, currentBotHue(currentBotId))
                         MsgType.Voice -> VoiceNoteWaveform(msg)
-                        else -> MessageBubble(msg, currentBotHue)
+                        else -> MessageBubble(msg, currentBotHue(currentBotId))
                     }
                 }
             }
@@ -184,10 +185,11 @@ private val placeholderMessages = listOf(
 private fun MessageBubble(msg: PlaceholderMsg, botHue: Color) {
     val t = DesignTokens
     val isUser = msg.from == "user"
-    val accent = if (isUser) t.Chrome.Text else botHue
-    val align = if (isUser) Alignment.End else Alignment.Start
-
-    Row(Modifier.fillMaxWidth(), horizontalAlignment = align) {
+    val accent = if (isUser) DesignTokens.Chrome.Text else botHue
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+    ) {
         Surface(
             shape = RoundedCornerShape(
                 topStart = if (isUser) 4.dp else 20.dp,
@@ -195,7 +197,7 @@ private fun MessageBubble(msg: PlaceholderMsg, botHue: Color) {
                 bottomStart = 20.dp,
                 bottomEnd = 20.dp,
             ),
-            color = if (isUser) t.Surfaces.SurfaceHigh else t.Surfaces.Surface,
+            color = if (isUser) DesignTokens.Surfaces.SurfaceHigh else DesignTokens.Surfaces.Surface,
             modifier = Modifier.borderStroke(accent, isUser),
         ) {
             Column(Modifier.padding(12.dp)) {
@@ -204,7 +206,7 @@ private fun MessageBubble(msg: PlaceholderMsg, botHue: Color) {
                         fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(2.dp))
                 }
-                Text(msg.text, style = MaterialTheme.typography.bodyMedium, color = t.Chrome.Text)
+                Text(msg.text, style = MaterialTheme.typography.bodyMedium, color = DesignTokens.Chrome.Text)
             }
         }
     }
@@ -225,9 +227,9 @@ private fun TraceChipBlock(msg: PlaceholderMsg, botHue: Color) {
     val t = DesignTokens
     var expanded by remember(msg.id) { mutableStateOf(false) }
     Surface(
-        shape = RoundedCornerShape(t.Shape.BlockRadius),
-        color = t.Surfaces.Surface,
-        modifier = Modifier.fillMaxWidth().border(width = 1.dp, color = t.Chrome.Outline, shape = RoundedCornerShape(t.Shape.BlockRadius)),
+        shape = RoundedCornerShape(DesignTokens.Shape.BlockRadius),
+        color = DesignTokens.Surfaces.Surface,
+        modifier = Modifier.fillMaxWidth().border(width = 1.dp, color = DesignTokens.Chrome.Outline, shape = RoundedCornerShape(DesignTokens.Shape.BlockRadius)),
     ) {
         Column(Modifier.padding(10.dp)) {
             Row(Modifier.fillMaxWidth()) {
@@ -242,7 +244,7 @@ private fun TraceChipBlock(msg: PlaceholderMsg, botHue: Color) {
                 Text(
                     if (expanded) "−" else "+",
                     style = MaterialTheme.typography.labelMedium,
-                    color = t.Chrome.TextFaint,
+                    color = DesignTokens.Chrome.TextFaint,
                 )
             }
             if (expanded) {
@@ -251,14 +253,14 @@ private fun TraceChipBlock(msg: PlaceholderMsg, botHue: Color) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = t.Surfaces.SurfaceHigh,
+                            color = DesignTokens.Surfaces.SurfaceHigh,
                         ) {
                             Text(
                                 " ${step.tool} ",
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontFamily = FontFamily.Monospace,
-                                color = t.Chrome.Text,
+                                color = DesignTokens.Chrome.Text,
                             )
                         }
                         Spacer(Modifier.width(6.dp))
@@ -266,7 +268,7 @@ private fun TraceChipBlock(msg: PlaceholderMsg, botHue: Color) {
                             step.result,
                             style = MaterialTheme.typography.labelSmall,
                             fontFamily = FontFamily.Monospace,
-                            color = t.Chrome.TextFaint,
+                            color = DesignTokens.Chrome.TextFaint,
                         )
                     }
                     Spacer(Modifier.height(4.dp))
@@ -285,10 +287,10 @@ private fun HandoffConnector(msg: PlaceholderMsg) {
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .height(1.dp)
-            .background(t.Chrome.OutlineSoft),
+            .background(DesignTokens.Chrome.OutlineSoft),
         contentAlignment = Alignment.Center,
     ) {
-        Surface(shape = CircleShape, color = t.Surfaces.Surface, contentColor = t.Chrome.TextSecondary) {
+        Surface(shape = CircleShape, color = DesignTokens.Surfaces.Surface, contentColor = DesignTokens.Chrome.TextSecondary) {
             Text(
                 text = " ${msg.text} ",
                 modifier = Modifier.padding(horizontal = 10.dp),
@@ -308,9 +310,9 @@ private fun VoiceNoteWaveform(msg: PlaceholderMsg) {
         (0..24).map { i -> 8 + (i * 7 % 20) }
     }
     Surface(
-        shape = RoundedCornerShape(t.Shape.CardRadius),
-        color = t.Surfaces.Surface,
-        modifier = Modifier.fillMaxWidth().border(width = 1.dp, color = t.Chrome.Outline, shape = RoundedCornerShape(t.Shape.CardRadius)),
+        shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
+        color = DesignTokens.Surfaces.Surface,
+        modifier = Modifier.fillMaxWidth().border(width = 1.dp, color = DesignTokens.Chrome.Outline, shape = RoundedCornerShape(DesignTokens.Shape.CardRadius)),
     ) {
         Row(
             Modifier.padding(12.dp),
@@ -319,10 +321,10 @@ private fun VoiceNoteWaveform(msg: PlaceholderMsg) {
         ) {
             // play button placeholder
             Box(
-                Modifier.size(28.dp).background(t.Status.Ok.copy(alpha = 0.2f), CircleShape),
+                Modifier.size(28.dp).background(DesignTokens.Status.Ok.copy(alpha = 0.2f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("▶", style = MaterialTheme.typography.labelMedium, color = t.Status.Ok)
+                Text("▶", style = MaterialTheme.typography.labelMedium, color = DesignTokens.Status.Ok)
             }
             Spacer(Modifier.width(8.dp))
             bars.forEach { h ->
@@ -330,11 +332,11 @@ private fun VoiceNoteWaveform(msg: PlaceholderMsg) {
                     Modifier
                         .width(3.dp)
                         .height(h.dp)
-                        .background(t.Chrome.Outline, RoundedCornerShape(2.dp)),
+                        .background(DesignTokens.Chrome.Outline, RoundedCornerShape(2.dp)),
                 )
             }
             Spacer(Modifier.width(8.dp))
-            Text(msg.text, style = MaterialTheme.typography.labelSmall, color = t.Chrome.TextFaint)
+            Text(msg.text, style = MaterialTheme.typography.labelSmall, color = DesignTokens.Chrome.TextFaint)
         }
     }
 }

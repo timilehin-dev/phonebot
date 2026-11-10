@@ -6,7 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancel
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -75,24 +75,24 @@ class MainActivity : ComponentActivity() {
 fun PhonebotTheme(content: @Composable () -> Unit) {
     val t = DesignTokens
     val colors = MaterialTheme.colorScheme.copy(
-        primary = t.Chrome.Text,
-        onPrimary = t.Surfaces.Background,
-        primaryContainer = t.Surfaces.SurfaceHigh,
-        onPrimaryContainer = t.Chrome.Text,
-        secondary = t.Status.Waiting,
-        onSecondary = t.Surfaces.Background,
-        background = t.Surfaces.Background,
-        onBackground = t.Chrome.Text,
-        surface = t.Surfaces.Surface,
-        onSurface = t.Chrome.Text,
-        surfaceVariant = t.Surfaces.SurfaceContainer,
-        onSurfaceVariant = t.Chrome.TextSecondary,
-        outline = t.Chrome.Outline,
-        outlineVariant = t.Chrome.OutlineSoft,
-        error = t.Status.Critical,
-        onError = t.Surfaces.Background,
-        errorContainer = t.Status.Critical.copy(alpha = 0.15f),
-        onErrorContainer = t.Status.Critical,
+        primary = DesignTokens.Chrome.Text,
+        onPrimary = DesignTokens.Surfaces.Background,
+        primaryContainer = DesignTokens.Surfaces.SurfaceHigh,
+        onPrimaryContainer = DesignTokens.Chrome.Text,
+        secondary = DesignTokens.Status.Waiting,
+        onSecondary = DesignTokens.Surfaces.Background,
+        background = DesignTokens.Surfaces.Background,
+        onBackground = DesignTokens.Chrome.Text,
+        surface = DesignTokens.Surfaces.Surface,
+        onSurface = DesignTokens.Chrome.Text,
+        surfaceVariant = DesignTokens.Surfaces.SurfaceContainer,
+        onSurfaceVariant = DesignTokens.Chrome.TextSecondary,
+        outline = DesignTokens.Chrome.Outline,
+        outlineVariant = DesignTokens.Chrome.OutlineSoft,
+        error = DesignTokens.Status.Critical,
+        onError = DesignTokens.Surfaces.Background,
+        errorContainer = DesignTokens.Status.Critical.copy(alpha = 0.15f),
+        onErrorContainer = DesignTokens.Status.Critical,
     )
     MaterialTheme(colorScheme = colors) { content() }
 }
@@ -184,12 +184,14 @@ fun PhonebotShell() {
                 .fillMaxSize()
                 .zIndex(1f)
                 .pointerInput(Unit) {
-                    val swipeThreshold = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() }
+                    // PointerInputScope is a Density: convert directly, no
+                    // composable LocalDensity lookup inside this block.
+                    val swipeThreshold = 96.dp.toPx()
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         if (down.type != PointerType.Touch) return@awaitEachGesture
                         if (down.position.y < size.height * 0.7f) return@awaitEachGesture
-                        val up = waitForUpOrCancel() ?: return@awaitEachGesture
+                        val up = waitForUpOrCancellation() ?: return@awaitEachGesture
                         if (down.position.y - up.position.y > swipeThreshold) {
                             paletteRequest = true
                         }
@@ -211,16 +213,16 @@ private fun BotRosterTab(onBotSelected: (String) -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .padding(t.Density.ScreenPad.dp),
+            .padding(DesignTokens.Density.ScreenPad.dp),
     ) {
         Text("Bots", style = MaterialTheme.typography.titleLarge)
         Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
             placeholderBots.forEach { bot ->
                 Surface(
                     modifier = Modifier,
-                    shape = RoundedCornerShape(t.Shape.ChipRadius),
-                    color = t.Surfaces.SurfaceContainer,
-                    contentColor = t.Chrome.Text,
+                    shape = RoundedCornerShape(DesignTokens.Shape.ChipRadius),
+                    color = DesignTokens.Surfaces.SurfaceContainer,
+                    contentColor = DesignTokens.Chrome.Text,
                 ) {
                     Text(
                         text = " ${bot.name} ",
@@ -241,7 +243,7 @@ private fun ShellBottomNav(
     onGear: () -> Unit,
 ) {
     val t = DesignTokens
-    NavigationBar(containerColor = t.Surfaces.Surface) {
+    NavigationBar(containerColor = DesignTokens.Surfaces.Surface) {
         val items = listOf(
             ShellTab.Observatory to Icons.Filled.Explore,
             ShellTab.Bots to Icons.Filled.AccountTree,

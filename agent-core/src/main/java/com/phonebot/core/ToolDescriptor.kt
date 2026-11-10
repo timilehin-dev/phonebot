@@ -2,64 +2,62 @@ package com.phonebot.core
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 
 /**
- * ToolDescriptor — mirrors the tool schema in contracts/registry.json.
+ * ToolDescriptor — mirrors `contracts/tool-descriptor.schema.json` (the
+ * schema of record), the same descriptor botd serves for builtin, custom
+ * and MCP-provided tools.
  *
- * A tool is anything a bot can invoke: a shell command wrapper, an MCP
- * connection, a file op, a notification, etc. botd owns the registry;
- * the app mirrors it over IPC and filters by each bot's allowlist before
- * generating the OpenAI tool_schema for the LLM prompt.
+ * botd owns the registry; the app mirrors it over IPC, filters by each bot's
+ * allowlist, and renders the result in Settings → Capabilities → Tools.
+ * `inputSchema` is passed through verbatim into the OpenAI
+ * `tools[].function.parameters` field, so it must stay a JSON object.
  */
 @Serializable
 data class ToolDescriptor(
-    /** Stable tool id, e.g. "web.scrape" or "shell.exec". */
+    /** Globally unique tool id, e.g. "shell.run". */
     val id: String,
-    /** Human-facing name shown in the Capabilities screen. */
-    val name: String,
-    /** Short description fed to the LLM. */
-    val description: String,
-    /**
-     * JSON-Schema object describing the arguments. Serialized straight
-     * into the OpenAI tools[].function.parameters field.
-     */
-    val parameters: JsonObjectLike = JsonObjectLike(emptyMap()),
-    /** Execution risk tier — drives the approval UX. */
-    val risk: RiskTier = RiskTier.Info,
-    /** Which backends can run this tool, e.g. ["termux-shell", "mcp"]. */
-    val backends: List<String> = listOf("termux-shell"),
-    /** Pipeline phase the tool belongs to. */
-    val phase: Phase = Phase.Execute,
-    /** Whether the tool can be re-run safely after a failure. */
-    val idempotent: Boolean = true,
+    /** builtin = shipped with botd; custom = bot-local; mcp = MCP server. */
+    val kind: ToolKind = ToolKind.Builtin,
+    /** Who serves the tool: core | botd | bot:<id> | mcp:<name>. */
+    val provider: String = "botd",
+    /** Model-facing name (typically identical to id). */
+    val name: String = "",
+    /** Model-facing description: what it does, when to use it, what it returns. */
+    val description: String = "",
+    /** JSON Schema for the tool arguments; enforced by botd at invoke time. */
+    @SerialName("input_schema") val inputSchema: JsonObject = JsonObject(emptyMap()),
+    /** Base risk tier (contract vocabulary: read/write/costly/destructive/privileged). */
+    val risk: RiskTier = RiskTier.Read,
+    /** Optional per-call escalation rules; botd evaluates them before execution. */
+    @SerialName("risk_rules") val riskRules: JsonArray = JsonArray(emptyList()),
+    /** Ordered execution backends; botd resolves the first available. */
+    val backends: List<String> = listOf("termux"),
+    /** Build phase in which the tool ships (1–4). */
+    val phase: Int = 1,
+    /** Whether the tool is enabled before a human opts out. */
+    @SerialName("default_allowed") val defaultAllowed: Boolean = true,
 )
 
-/** JsonObjectLike is a serializable stand-in for an arbitrary JSON object. */
+/** Tool provenance, matching the contract's `kind` enum. */
 @Serializable
-data class JsonObjectLike(val fields: Map<String, Any> = emptyMap())
+enum class ToolKind {
+    @SerialName("builtin") Builtin,
+    @SerialName("custom") Custom,
+    @SerialName("mcp") Mcp,
+}
 
 /**
- * Risk tier — the same enum drives:
- *  - the approval queue on the app (info / confirm / critical cards)
- *  - botd's gate: critical tools always require a human decision
+ * Risk tier — the contract's five tiers. read+write are silent (trace chip);
+ * destructive+privileged always need approval; costly is spend-cap gated.
  */
 @Serializable
 enum class RiskTier {
-    /** Informational — no approval needed, just logged. */
-    @SerialName("info") Info,
-    /** Routine action — one-tap confirm on the app. */
-    @SerialName("confirm") Confirm,
-    /** Irreversible / destructive — expanded card, explicit Approve/Deny/Ask. */
-    @SerialName("critical") Critical,
-}
-
-/** Pipeline phase a tool participates in. */
-@Serializable
-enum class Phase {
-    /** Pre-checks: validation, read-only probes. */
-    @SerialName("prepare") Prepare,
-    /** Main execution. */
-    @SerialName("execute") Execute,
-    /** Post-run: cleanup, notification, digest. */
-    @SerialName("finalize") Finalize,
+    @SerialName("read") Read,
+    @SerialName("write") Write,
+    @SerialName("costly") Costly,
+    @SerialName("destructive") Destructive,
+    @SerialName("privileged") Privileged,
 }

@@ -48,3 +48,37 @@ jobs:
 
       - name: Offline LLM smoketest
         run: python -m botd.main --smoketest-llm --llm-mode fake
+
+      - name: Regression checks
+        run: python test/regression_check.py
+
+  android-build:
+    # Compiles the APK so Kotlin/Compose/AGP breakage fails the build, not
+    # just the tag-time release workflow.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: phonebot-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14

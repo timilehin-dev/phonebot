@@ -12,7 +12,7 @@ import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkState
+import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
@@ -58,25 +58,18 @@ class AlarmScheduler(private val context: Context) {
             set(Calendar.MINUTE, minute)
             set(Calendar.SECOND, 0)
             dayOfWeek?.let { set(Calendar.DAY_OF_WEEK, it) }
-            if (timeInMillis < SystemClock.elapsedRealtime()) timeInMillis += TimeUnit.DAYS.toMillis(1)
+            if (timeInMillis <= System.currentTimeMillis()) {
+                timeInMillis += TimeUnit.DAYS.toMillis(1)
+            }
         }
         val pi = buildPendingIntent(tag, cal.timeInMillis)
         return try {
-            // API 31+: exact alarms require canScheduleExactAlarms() — the app
-            // gates this via the Settings intent (SCHEDULE_EXACT_ALARM).
-            val triggeredAt = if (Build.VERSION.SDK_INT >= 31) {
-                AlarmManagerCompat.setExactAndAllowWhileIdle(
-                    alarmManager, cal.timeInMillis, pi,
-                    /* callbackExecutor = */ null,
-                )
-            } else {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.INTERVAL_DAY,
-                    SystemClock.elapsedRealtime() + (cal.timeInMillis - System.currentTimeMillis()),
-                    pi,
-                )
-            }
-            triggeredAt
+            // AlarmManagerCompat applies the right API-level semantics; the app
+            // gates exact-alarm permission via Settings (SCHEDULE_EXACT_ALARM).
+            AlarmManagerCompat.setExactAndAllowWhileIdle(
+                alarmManager, AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi,
+            )
+            true
         } catch (e: SecurityException) {
             Log.w("AlarmScheduler", "SCHEDULE_EXACT_ALARM denied for tag=$tag", e)
             false
@@ -107,15 +100,15 @@ class AlarmScheduler(private val context: Context) {
      */
     fun enqueueMissedRunCatchUp() {
         val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkState.CONNECTED)
-            .setBatteryCharging(true)
-            .setDeviceIdleMaintenanceWindow(false) // allow during idle, not only maintenance
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiresCharging(true)
+            .setRequiresDeviceIdle(true)
             .build()
         val request = PeriodicWorkRequestBuilder<MissedRunCatchUpWorker>(
-            CATCH_UP_HOURS, TimeUnit.HOURS,
+            CATCH_UP_HOURS.toLong(), TimeUnit.HOURS,
         )
             .setConstraints(constraints)
-            .setBackoffCriteria(BackoffPolicy.LINEAR, 15, TimeUnit.MINUTES)
+            .setBackoffCriteria(BackoffPolicy.LINEAR, 15L, TimeUnit.MINUTES)
             .build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             WORK_NAME,
@@ -134,10 +127,12 @@ class AlarmScheduler(private val context: Context) {
             val tag = intent.getStringExtra("tag") ?: return
             Log.d("AlarmScheduler", "alarm fired: tag=$tag")
             // Open the app → foreground service → nudge botd tick via TermuxBridge.
-            val appIntent = Intent(context, com.phonebot.app.MainActivity::class.java).apply {
-                putExtra("phonebot_routine_tag", tag)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
+            // Resolve the launch intent by package: :scheduling must not depend
+            // on :app (that would be a circular module dependency).
+            val appIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                ?: return
+            appIntent.putExtra("phonebot_routine_tag", tag)
+            appIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(appIntent)
             // TODO(Phase 2): replace app-open with a foreground service start
             // so the user's UI is not disturbed.
@@ -161,7 +156,7 @@ class AlarmScheduler(private val context: Context) {
                 // windows in its own session. The botd `scheduler.run_trigger`
                 // entry point handles this; the trigger object encodes the
                 // mode so the isolated session knows to replay.
-                bridge.runBot("chief-of-staff", """{"trigger":"catch_up"}""")
+                bridge.runBot("chief", """{"trigger":"catch_up"}""")
                 Result.success()
             } catch (e: Exception) {
                 // Socket down (botd not running, API 33 without UnixDomainSocket) —
