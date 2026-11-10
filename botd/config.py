@@ -46,24 +46,36 @@ DEFAULT_LLM_MODEL = "gpt-4o-mini"
 
 @dataclass
 class LLMConfig:
-    """Cloud LLM endpoint configuration (OpenAI-compatible)."""
+    """Cloud LLM endpoint configuration (OpenAI-compatible).
+
+    ``mode`` selects the backend resolution policy used by
+    :func:`botd.llm.build_backend`:
+
+    * ``"auto"``   (default) - use a real OpenAI-compatible call when a key
+      resolves, else fall back to the offline fake. Safe on a bare device.
+    * ``"direct"`` - always use the real HTTP client (raises if no key).
+    * ``"fake"``   - always the deterministic offline backend (tests / no network).
+    """
 
     base_url: str = DEFAULT_LLM_BASE_URL
     api_key_ref: str = "default"
     model: str = DEFAULT_LLM_MODEL
     timeout_s: float = 120.0
+    mode: str = "auto"
     # Optional extra headers the app may inject (e.g. org id).
     extra_headers: Dict[str, str] = field(default_factory=dict)
 
     def validate(self) -> List[str]:
         """Return a list of human-readable validation errors (empty == OK)."""
         errors: List[str] = []
-        if not self.base_url.startswith(("http://", "https://")):
-            errors.append(f"llm.base_url must be an http(s) URL, got {self.base_url!r}")
+        if not self.base_url.startswith(("http://", "https://", "fake", "none")):
+            errors.append(f"llm.base_url must be an http(s) URL (or 'fake'), got {self.base_url!r}")
         if not self.api_key_ref:
             errors.append("llm.api_key_ref must be a non-empty reference name")
         if not self.model:
             errors.append("llm.model must be a non-empty model identifier")
+        if self.mode not in ("auto", "direct", "fake"):
+            errors.append(f"llm.mode must be one of auto|direct|fake, got {self.mode!r}")
         return errors
 
 

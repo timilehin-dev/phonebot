@@ -1,0 +1,18 @@
+{
+  "home_path": "~/multibot",
+  "socket_name": "@multibot",
+  "llm": {
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_key_ref": "openrouter",
+    "model": "openrouter/auto",
+    "timeout_s": 120.0,
+    "mode": "direct",
+    "extra_headers": {}
+  },
+  "backend": {
+    "shell": "termux",
+    "python": "termux"
+  },
+  "max_concurrent_bots": 8,
+  "spend_cap_per_bot_usd": 5.0
+}

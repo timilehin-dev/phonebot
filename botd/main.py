@@ -69,9 +69,13 @@ JOBS_TEMPLATE: Dict[str, Any] = {"version": 1, "jobs": {}}
 # ---------------------------------------------------------------------------
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
-    """Parse the daemon CLI: ``--selftest`` and ``--config PATH``."""
+    """Parse the daemon CLI: ``--selftest``, ``--smoketest-llm``, ``--config PATH``."""
     parser = argparse.ArgumentParser(prog="botd", description="multibot-android durable execution plane")
     parser.add_argument("--selftest", action="store_true", help="run the health-check battery and exit")
+    parser.add_argument("--smoketest-llm", action="store_true",
+                        help="drive the agent loop end-to-end against the LLM backend, then exit")
+    parser.add_argument("--llm-mode", choices=("auto", "direct", "fake"), default=None,
+                        help="override the LLM backend mode for this run (used by --smoketest-llm)")
     parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, metavar="PATH",
                         help=f"config file location (default: {DEFAULT_CONFIG_PATH})")
     parser.add_argument("--version", action="version", version=f"botd {__version__}")
@@ -370,6 +374,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         from .selftest import run_selftest
 
         return run_selftest(config)
+
+    if args.smoketest_llm:
+        from .llm import run_llm_smoketest
+
+        return run_llm_smoketest(config, force=args.llm_mode, verbose=True)
 
     try:
         return asyncio.run(run_daemon(config))

@@ -495,21 +495,32 @@ class IpcServer:
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]],
     ) -> Dict[str, Any]:
-        """Perform a cloud LLM call.
+        """Perform a cloud LLM call (OpenAI-compatible; OpenRouter works here).
 
         * If the app is connected and asks us to relay, we still execute the
           call here (botd owns the credentials) and report back.
-        * If the app is NOT connected, this is the *direct fallback*: read
-          ``endpoint.json``, call the API with httpx, and return the result.
+        * If the app is NOT connected, this is the *direct fallback*: resolve
+          ``endpoint.json`` + the named secret and call the API with httpx.
 
-        Phase 1 replaces the placeholder body with a real OpenAI-compatible
-        httpx call (streaming when requested). The control flow here is final.
+        Backend selection honours ``config.llm.mode``:
+
+        * ``direct`` - always the real HTTP client.
+        * ``fake``   - the deterministic offline backend.
+        * ``auto``   - real HTTP when a key resolves, else offline fallback so a
+          fresh device with no key never hard-fails.
+
+        The key is never logged; only the non-secret endpoint fields are kept
+        for traceability.
         """
-        endpoint = self.resolve(self.config.llm.api_key_ref)
-        # Placeholder for Phase 1: a real implementation POSTs to
-        # f"{endpoint['base_url']}/chat/completions" with the API key and
-        # returns {"content","tool_calls","finish_reason","usage"}.
-        return self._placeholder_completion(model, messages, tools, endpoint)
+        from .llm import build_backend
+
+        backend, meta = build_backend(self.config, home_path=self.config.home_path)
+        result = await backend.complete(model, messages, tools)
+        # Keep the API key out of any trace/context; record only non-secret
+        # backend metadata for observability.
+        result["_llm_backend"] = meta.get("backend")
+        result["_llm_model"] = meta.get("model")
+        return result
 
     @staticmethod
     def _placeholder_completion(
