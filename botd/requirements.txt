@@ -1,0 +1,9 @@
+# botd runtime dependencies (Python 3.10+)
+#
+# Core:
+httpx>=0.27,<1.0
+asyncssh>=2.14
+
+# Optional integrations (imported lazily; features degrade gracefully):
+# beautifulsoup4>=4.12   # better HTML text extraction for web.extract
+# rich>=13.0             # nicer console output for the selftest / daemon logs

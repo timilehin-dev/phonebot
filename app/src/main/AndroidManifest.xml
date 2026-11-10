@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  multibot-android manifest.
+  Design: app is the control/UI/credential plane; execution lives in Termux (botd).
+  No Shizuku by default. No local LLM — cloud OpenAI-compatible only.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- APK distribution via GitHub Releases; first-run wizard auto-installs Termux. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- Keep botd's heartbeat + periodic tick alive; battery-optimization exemption. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Phase 1 exact-alarm routines (AlarmScheduler, API 31+). -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!-- Foreground service that nudges botd through Termux:Boot after boot. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Accessibility service is declared, NOT requested here — enabled via intent
+         in CapabilitiesScreen → device backend (assist). -->
+    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- Detect Termux + Termux:API presence. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <application
+        android:name=".App"
+        android:allowBackup="true"
+        android:label="Multibot"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:theme="@style/Theme.Multibot"
+        android:supportsRtl="true">
+
+        <!-- Single-activity Compose shell (MainActivity) — no launcher icon variant yet. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Multibot"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          Foreground service: survives process death so the botd nudge path keeps
+          working through the app's lifecycle. Started on boot + on demand.
+          TODO(Phase 2): type="shortService" for interactive nudge (termux-api shell poke).
+        -->
+        <service
+            android:name=".service.BotdNudgeService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+
+        <!-- BOOT_COMPLETED → start the foreground service, which pokes botd via Termux:Boot. -->
+        <receiver
+            android:name=".service.BootCompletedReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+          Accessibility service (device backend: assist/accessibility).
+          The service itself is declared; enablement goes through the Settings intent
+          (ACTION_ACCESSIBILITY_SETTINGS) — never auto-granted by the manifest.
+          TODO(Phase 2): wire .service.MultibotAccessibilityService + accessibility_config.xml.
+        -->
+        <service
+            android:name=".service.MultibotAccessibilityService"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            tools:ignore="MissingClass">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.accessibility.AccessibilityService"
+                android:resource="@xml/accessibility_config"
+                tools:ignore="MissingResource" />
+        </service>
+
+        <!--
+          Self-update: our own APK is installed through PackageInstallerFlow
+          (GitHub Release asset), same REQUEST_INSTALL_PACKAGES gate as Termux.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.multibot.app.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"
+                tools:ignore="MissingResource" />
+        </provider>
+    </application>
+</manifest>

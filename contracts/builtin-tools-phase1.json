@@ -1,0 +1,329 @@
+[
+  {
+    "id": "shell.run",
+    "kind": "builtin",
+    "provider": "botd",
+    "name": "shell.run",
+    "description": "Run a shell command in an available shell backend. Returns stdout, stderr, and exit code. Supports working directory, timeout, and extra environment variables. This is the primary execution surface for botd-side work.",
+    "input_schema": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Command line to execute (passed to the backend shell)."
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory. Defaults to the invoking bot's home."
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Hard wall-clock timeout in milliseconds. Command is killed when exceeded."
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Extra environment variables for the command. Must not override credential variables."
+        }
+      }
+    },
+    "risk": "write",
+    "risk_rules": [
+      "Argument inspection may escalate destructive shell forms (e.g. rm -rf outside the bot home, package/system modifications) to destructive at call time."
+    ],
+    "backends": ["termux", "ssh"],
+    "phase": 1,
+    "default_allowed": true
+  },
+  {
+    "id": "files.read",
+    "kind": "builtin",
+    "provider": "botd",
+    "name": "files.read",
+    "description": "Read a text file. Returns the full content or a bounded window. Bots default to their own home; other paths require that the caller can reach them through the active backend.",
+    "input_schema": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "File path to read."
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Byte offset to start reading from. Defaults to 0."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum bytes to return."
+        }
+      }
+    },
+    "risk": "read",
+    "backends": ["termux", "ssh"],
+    "phase": 1,
+    "default_allowed": true
+  },
+  {
+    "id": "files.write",
+    "kind": "builtin",
+    "provider": "botd",
+    "name": "files.write",
+    "description": "Create or overwrite a text file. Within the bot home this is a silent write (trace chip). Paths outside the home are subject to the write-risk escalation rules.",
+    "input_schema": {
+      "type": "object",
+      "required": ["path", "content"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Destination file path."
+        },
+        "content": {
+          "type": "string",
+          "description": "Full file content to write."
+        },
+        "append": {
+          "type": "boolean",
+          "default": false,
+          "description": "Append instead of overwrite."
+        }
+      }
+    },
+    "risk": "write",
+    "backends": ["termux", "ssh"],
+    "phase": 1,
+    "default_allowed": true
+  },
+  {
+    "id": "files.search",
+    "kind": "builtin",
+    "provider": "botd",
+    "name": "files.search",
+    "description": "Search file names and contents under a directory. Returns matching paths with line numbers and a bounded excerpt. Read-only.",
+    "input_schema": {
+      "type": "object",
+      "required": ["pattern"],
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Regular expression to search for."
+        },
+        "path": {
+          "type": "string",
+          "description": "Directory to search under. Defaults to the bot home."
+        },
+        "glob": {
+          "type": "string",
+          "description": "Optional file-name glob filter, e.g. \"*.md\"."
+        },
+        "case_sensitive": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the match is case-sensitive."
+        }
+      }
+    },
+    "risk": "read",
+    "backends": ["termux", "ssh"],
+    "phase": 1,
+    "default_allowed": true
+  },
+  {
+    "id": "web.search",
+    "kind": "builtin",
+    "provider": "botd",
+    "name": "web.search",
+    "description": "Search the web. Returns a ranked list of {title, url, snippet}. No content extraction — pair with web.extract when the body is needed.",
+    "input_schema": {
+      "type": "object",
+      "required": ["query"],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query."
+        },
+        "max_results": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 5,
+          "description": "Maximum number of results to return."
+        }
+      }
+    },
+    "risk": "read",
+    "phase": 1,
+    "default_allowed": true
+  },
+  {
+    "id": "web.extract",
+    "kind": "builtin",
+    "provider": "botd",
+    "name": "web.extract",
+    "description": "Fetch a URL and extract readable text (Markdown-ish normalization of the main content). Optionally narrow extraction with a CSS selector.",
+    "input_schema": {
+      "type": "object",
+      "required": ["url"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Absolute http(s) URL to fetch."
+        },
+        "selector": {
+          "type": "string",
+          "description": "Optional CSS selector to restrict extraction to one region of the page."
+        }
+      }
+    },
+    "risk": "read",
+    "phase": 1,
+    "default_allowed": true
+  },
+  {
+    "id": "memory.update",
+    "kind": "builtin",
+    "provider": "botd",
+    "name": "memory.update",
+    "description": "Update the invoking bot's curated long-term memory files (soul.md, user.md, or memory.md). append adds a section; replace swaps old_content for content; delete removes old_content. This is the bot's only sanctioned way to edit its own identity and memory.",
+    "input_schema": {
+      "type": "object",
+      "required": ["target", "operation", "content"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": ["soul", "user", "memory"],
+          "description": "Which memory file: soul.md (identity) | user.md (about the human) | memory.md (long-term memory)."
+        },
+        "operation": {
+          "type": "string",
+          "enum": ["append", "replace", "delete"],
+          "description": "append: add content; replace: swap old_content → content; delete: remove old_content."
+        },
+        "content": {
+          "type": "string",
+          "description": "New or appended content. Ignored for delete."
+        },
+        "old_content": {
+          "type": "string",
+          "description": "Exact existing text targeted by replace/delete. Must match uniquely."
+        }
+      }
+    },
+    "risk": "write",
+    "phase": 1,
+    "default_allowed": true
+  },
+  {
+    "id": "memory.search",
+    "kind": "builtin",
+    "provider": "botd",
+    "name": "memory.search",
+    "description": "Search the invoking bot's memory files and session history. Returns matching excerpts with source file and context.",
+    "input_schema": {
+      "type": "object",
+      "required": ["query"],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Text query (substring or regex, backend-dependent)."
+        },
+        "target": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["soul", "user", "memory", "sessions"]
+          },
+          "description": "Where to search. Defaults to all memory files plus session history."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "default": 10,
+          "description": "Maximum matches to return."
+        }
+      }
+    },
+    "risk": "read",
+    "phase": 1,
+    "default_allowed": true
+  },
+  {
+    "id": "request_approval",
+    "kind": "builtin",
+    "provider": "botd",
+    "name": "request_approval",
+    "description": "Escalate an action to a human: push an approval card to the owning app, block the current turn until the verdict arrives, and return the verdict. For destructive or privileged operations that a risk_rule has escalated. The bot must state exactly what will happen and why.",
+    "input_schema": {
+      "type": "object",
+      "required": ["action", "rationale"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "Exact description of the pending action, tool id and arguments included."
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Why this action is needed now; what has already been tried."
+        }
+      }
+    },
+    "risk": "privileged",
+    "phase": 1,
+    "default_allowed": true
+  },
+  {
+    "id": "bus_publish",
+    "kind": "builtin",
+    "provider": "botd",
+    "name": "bus_publish",
+    "description": "Publish an event to the multibot event bus. Phase 1: stub — events are logged to the invoking bot's trace stream only. Phase 2: full delivery to addressed bots' wakeup queues (cron_result, bot-to-bot messages).",
+    "input_schema": {
+      "type": "object",
+      "required": ["topic", "payload"],
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Event topic, e.g. \"cron_result\", \"task_completed\"."
+        },
+        "payload": {
+          "type": "object",
+          "description": "Event payload. Must be JSON-serializable and must not contain secret values."
+        }
+      }
+    },
+    "risk": "write",
+    "phase": 1,
+    "default_allowed": true
+  },
+  {
+    "id": "list_inbox",
+    "kind": "builtin",
+    "provider": "botd",
+    "name": "list_inbox",
+    "description": "List the invoking bot's pending wakeup queue entries (cron_result and bus events). Phase 1: stub — returns queue depth and oldest entry age; full entry listing lands with Phase 2 bus delivery.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "bot": {
+          "type": "string",
+          "description": "Bot name to inspect. Defaults to the invoking bot."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20,
+          "description": "Maximum entries to return, oldest first."
+        }
+      }
+    },
+    "risk": "read",
+    "phase": 1,
+    "default_allowed": true
+  }
+]

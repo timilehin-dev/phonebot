@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "multibot:contracts/invoke-envelope.schema.json",
+  "title": "InvokeEnvelope",
+  "description": "Request/response envelope for tool invocation between the app (client) and botd (server) over the @multibot abstract-namespace Unix socket. Frames are newline-delimited JSON. One of Request or Response per frame.",
+  "oneOf": [
+    { "$ref": "#/$defs/Request" },
+    { "$ref": "#/$defs/Response" }
+  ],
+  "$defs": {
+    "Request": {
+      "type": "object",
+      "description": "Client → server tool invocation request.",
+      "required": ["tool", "args", "ctx"],
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "Tool id to invoke, e.g. \"shell.run\" (see builtin-tools-phase1.json)."
+        },
+        "args": {
+          "type": "object",
+          "description": "Tool arguments. Validated by botd against the target ToolDescriptor's input_schema."
+        },
+        "ctx": {
+          "type": "object",
+          "description": "Invocation context, assigned by the caller and echoed back on the response.",
+          "required": ["bot", "session", "turn", "corr_id"],
+          "properties": {
+            "bot": {
+              "type": "string",
+              "description": "Owning bot name (directory under ~/multibot/bots/)."
+            },
+            "session": {
+              "type": "string",
+              "description": "Session id (sessions.db row) in which the invocation occurs."
+            },
+            "turn": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Zero-based turn index within the session."
+            },
+            "corr_id": {
+              "type": "string",
+              "description": "Correlation id (UUIDv7). Echoed verbatim in the response; used by the client to match pending invocations."
+            },
+            "priority": {
+              "type": "string",
+              "enum": ["low", "normal", "high", "critical"],
+              "default": "normal",
+              "description": "Scheduling priority for the invocation on the botd side (queue ordering, not a risk control)."
+            }
+          }
+        }
+      }
+    },
+    "Response": {
+      "type": "object",
+      "description": "Server → client invocation result. Exactly one response per corr_id; blocked invocations (needs_approval) resolve to a single terminal response after the human verdict.",
+      "required": ["corr_id", "status"],
+      "properties": {
+        "corr_id": {
+          "type": "string",
+          "description": "Echoed correlation id from the request."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ok", "error", "needs_approval"],
+          "description": "ok = executed; error = execution failed; needs_approval = blocked pending a human verdict (terminal response delivered after the verdict, carrying the outcome)."
+        },
+        "result": {
+          "description": "Tool result payload. Shape is tool-specific; present on ok. Omitted on error and on needs_approval."
+        },
+        "error": {
+          "type": "object",
+          "description": "Present when status = error.",
+          "required": ["code"],
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "Stable machine-readable error code, e.g. \"backend_unavailable\", \"schema_violation\", \"risk_gate\"."
+            },
+            "message": {
+              "type": "string",
+              "description": "Human-readable detail. Never contains secret values."
+            }
+          }
+        },
+        "trace": {
+          "type": "object",
+          "description": "Execution trace. Present on ok; informational on error.",
+          "properties": {
+            "backend": {
+              "type": "string",
+              "description": "Backend actually used, e.g. \"termux\". Null-equivalent when execution was blocked before backend resolution."
+            },
+            "duration_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Wall-clock execution time in milliseconds."
+            },
+            "approval_ref": {
+              "type": "string",
+              "description": "Approval record id (audit). Present when an approval was required or when the call was a standing-grant re-use."
+            }
+          }
+        },
+        "side_effects": {
+          "type": "object",
+          "description": "Declared side effects of the invocation, for trace chips and the audit log.",
+          "properties": {
+            "files_touched": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Filesystem paths read or written during the invocation."
+            },
+            "bus_events": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Bus events emitted during the invocation, e.g. \"cron_result\", \"task_completed\"."
+            }
+          }
+        }
+      }
+    }
+  }
+}

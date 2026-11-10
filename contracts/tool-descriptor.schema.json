@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "multibot:contracts/tool-descriptor.schema.json",
+  "title": "ToolDescriptor",
+  "description": "Uniform descriptor for every tool in the multibot system: builtin, custom (bot-local), and MCP-provided. botd validates descriptors against this schema at registry load time; the app renders descriptors read-only.",
+  "type": "object",
+  "required": ["id", "kind", "name", "description", "input_schema", "risk", "phase"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Globally unique tool id, dotted namespace, e.g. \"shell.run\"."
+    },
+    "kind": {
+      "enum": ["builtin", "custom", "mcp"],
+      "description": "builtin = shipped with botd; custom = bot-local skill tool; mcp = provided by a registered MCP server."
+    },
+    "provider": {
+      "type": "string",
+      "description": "Who serves the tool: core | botd | bot:<id> | mcp:<name>."
+    },
+    "name": {
+      "type": "string",
+      "description": "Model-facing name. Typically identical to id."
+    },
+    "description": {
+      "type": "string",
+      "description": "Model-facing description: what the tool does, when to use it, what it returns."
+    },
+    "input_schema": {
+      "type": "object",
+      "description": "JSON Schema object describing the tool's arguments. Enforced by botd at invoke time."
+    },
+    "risk": {
+      "enum": ["read", "write", "destructive", "costly", "privileged"],
+      "description": "Base risk tier. read+write = silent (trace chip); destructive+privileged = needs-approval; costly = spend-cap gated. May be escalated per-call via risk_rules, never lowered below privileged."
+    },
+    "risk_rules": {
+      "type": "array",
+      "description": "Optional per-call rules (condition → escalation) evaluated by botd before execution."
+    },
+    "backends": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Ordered backend names this tool can execute on (e.g. [\"termux\", \"ssh\"]). Resolver picks the first available."
+    },
+    "phase": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4,
+      "description": "Build phase in which this tool ships. The registry exposes tools at or below the active phase."
+    },
+    "default_allowed": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether the tool is enabled by default before a human opts out in Settings → Capabilities → Tools."
+    }
+  }
+}
