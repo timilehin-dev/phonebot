@@ -43,5 +43,8 @@ jobs:
       - name: Mock OpenAI plumbing
         run: python test/mock_openai_check.py
 
+      - name: CLI cross-process round-trip (app → Termux → botd)
+        run: python test/cli_roundtrip_check.py
+
       - name: Offline LLM smoketest
         run: python -m botd.main --smoketest-llm --llm-mode fake

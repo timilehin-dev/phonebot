@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Accessibility service config for the "device backend: assist" plane.
+  The service is declared in the manifest (NOT auto-enabled); the user
+  enables it from Settings → Accessibility when they want the human-assist
+  fallback for device control. Phase 1: event sink only; Phase 2: action
+  queue consumed by the assist backend (docs/ADR-001 D6).
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefaultNotification|flagReportViewIds"
+    android:canRetrieveWindowContent="true"
+    android:notificationTimeout="300"
+    android:settingsActivity="com.multibot.app.MainActivity" />

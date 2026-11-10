@@ -19,6 +19,21 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // CI signing: pass -Psigning.storeFile/-storePass/-keyAlias/-keyPass
+    // (see .github/workflows/release.yml). The botd payload / APK are
+    // re-signed on the release channel; debug builds stay unsigned.
+    signingConfigs {
+        create("ciRelease") {
+            val storeFileProp = project.findProperty("signing.storeFile")
+            if (storeFileProp != null) {
+                storeFile = file(storeFileProp.toString())
+                storePassword = project.findProperty("signing.storePass")?.toString()
+                keyAlias = project.findProperty("signing.keyAlias")?.toString()
+                keyPassword = project.findProperty("signing.keyPass")?.toString()
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -26,6 +41,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (project.hasProperty("signing.storeFile")) {
+                signingConfig = signingConfigs.getByName("ciRelease")
+            }
         }
         debug {
             isMinifyEnabled = false

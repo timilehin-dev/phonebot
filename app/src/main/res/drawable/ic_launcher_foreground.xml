@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The "eye" motif of the Observatory. 108x108dp adaptive viewport; the
+     inner 66x66dp safe zone is what survives system masking. -->
+<vector
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- instrument ring -->
+    <path
+        android:fillColor="#3DD68C"
+        android:pathData="M54,34a20,20 0 1,0 0.01,0z M54,40a14,14 0 1,1 -0.01,0z"
+        android:fillType="evenOdd" />
+    <!-- scanline / pupil -->
+    <path
+        android:fillColor="#F2F4F8"
+        android:pathData="M54,50a4,4 0 1,0 0.01,0z" />
+    <!-- crosshair ticks -->
+    <path
+        android:fillColor="#3DD68C"
+        android:pathData="M54,28h2v6h-2z M54,74h2v6h-2z M28,53h6v2h-6z M74,53h6v2h-6z" />
+</vector>

@@ -50,9 +50,9 @@ sealed class Step {
     object DeployBotd : Step() {
         override val id = "deploy_botd"
         override val label = "Deploy botd"
-        override fun check(c: Context, b: TermuxBridge, i: PackageInstallerFlow) = b.isSocketUp()
+        override fun check(c: Context, b: TermuxBridge, i: PackageInstallerFlow) = b.isBotdUp()
         override suspend fun execute(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
-            StepResult.Running // Phase 2: git clone botd, make install, start daemon
+            StepResult.Running // Phase 2: deploy botd payload via SSH + start daemon
         override fun repair(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
             if (check(c, b, i)) StepResult.Done else StepResult.Running
     }

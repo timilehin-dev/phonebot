@@ -155,10 +155,17 @@ class AlarmScheduler(private val context: Context) {
         override suspend fun doWork(): Result {
             val bridge = com.multibot.termux.TermuxBridge(applicationContext)
             return try {
-                bridge.sendRequest("routines.replay_missed")
+                // `routines.replay_missed` is NOT a botd IPC control message.
+                // Instead we trigger a bot run with a special trigger that
+                // tells the botd AgentLoop to re-run due-but-missed cron
+                // windows in its own session. The botd `scheduler.run_trigger`
+                // entry point handles this; the trigger object encodes the
+                // mode so the isolated session knows to replay.
+                bridge.runBot("chief-of-staff", """{"trigger":"catch_up"}""")
                 Result.success()
             } catch (e: Exception) {
-                // Socket down (botd not running) — retry after backoff.
+                // Socket down (botd not running, API 33 without UnixDomainSocket) —
+                // retry after backoff.
                 Result.retry()
             }
         }

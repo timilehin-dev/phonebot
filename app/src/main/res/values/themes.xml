@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Multibot app theme.
+  Dark-only instrument-panel chrome (design-tokens/design-tokens.md).
+  The window background matches the deepest surface (#0B0D10) so there is no
+  white flash before Compose draws the Observatory.
+-->
+<resources>
+    <style name="Theme.Multibot" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/mb_canvas</item>
+        <item name="android:colorBackground">@color/mb_canvas</item>
+        <item name="android:statusBarColor">@color/mb_canvas</item>
+        <item name="android:navigationBarColor">@color/mb_canvas</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

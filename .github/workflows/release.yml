@@ -1,0 +1,157 @@
+# Release pipeline — builds the APK + packs the botd payload + publishes
+# a GitHub Release with all assets.
+#
+# Triggers:
+#   - tag: v*          (e.g. v0.1.0 → version 0.1.0)
+#   - manual dispatch  (draft, non-released)
+#
+# Signing:
+#   Provide the keystore via repo secrets:
+#     MULTIBOT_KEYSTORE        (base64 of keystore file)
+#     MULTIBOT_KEYSTORE_PASS
+#     MULTIBOT_KEY_ALIAS
+#     MULTIBOT_KEY_PASS
+#   Without them, the job builds an *unsigned* APK + the botd payload and
+#   uploads assets without publishing a release, so you can still grab the
+#   botd tarball/manifest.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.1.0)"
+        required: true
+        default: "0.1.0"
+      draft:
+        description: "Create a draft release"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.pack.outputs.version }}
+      signed: ${{ steps.sign.outputs.signed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # No Gradle wrapper committed — bootstrap it, then use it.
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          version: 8.11.1
+
+      - name: Generate Gradle wrapper
+        run: |
+          gradle wrapper --gradle-version 8.11.1 --no-daemon
+          # Persist the wrapper so future CI runs don't need re-bootstrap.
+          git config user.name "multibot-ci"
+          git config user.email "ci@multibot.local"
+          git add gradle/ gradlew gradlew.bat 2>/dev/null || true
+          git diff --quiet || git commit -m "ci: add gradle wrapper"
+
+      - name: Decode signing keystore (if secrets present)
+        id: sign
+        run: |
+          if [ -n "${{ secrets.MULTIBOT_KEYSTORE }}" ]; then
+            mkdir -p signing
+            echo "${{ secrets.MULTIBOT_KEYSTORE }}" | base64 -d > "signing/multibot-release.keystore"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+
+      - name: Build APK
+        run: |
+          if [ "${{ steps.sign.outputs.signed }}" = "true" ]; then
+            ./gradlew --no-daemon assembleRelease \
+              -Psigning.storeFile=signing/multibot-release.keystore \
+              -Psigning.storePass="${{ secrets.MULTIBOT_KEYSTORE_PASS }}" \
+              -Psigning.keyAlias="${{ secrets.MULTIBOT_KEY_ALIAS }}" \
+              -Psigning.keyPass="${{ secrets.MULTIBOT_KEY_PASS }}"
+            echo "APK=app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_ENV"
+          else
+            echo "No keystore secrets — building unsigned APK (installable only with 'adb install -r')."
+            ./gradlew --no-daemon assembleDebug
+            echo "APK=app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_ENV"
+          fi
+
+      - name: Copy APK into release dir
+        run: |
+          mkdir -p release/dist
+          cp "$APK" release/dist/multibot-$(basename "$APK")
+          ls -la release/dist/
+
+      - name: Pack botd payload + manifest
+        id: pack
+        run: |
+          python3 -m pip install --upgrade pip >/dev/null
+          VERSION="${{ github.event.inputs.version || '' }}"
+          if [ -z "$VERSION" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name#v }}"
+          fi
+          [ -z "$VERSION" ] && VERSION="0.0.0-dev"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "using version: $VERSION"
+          python3 release/pack.py --version "$VERSION" --sign
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: multibot-release-${{ github.run_id }}
+          path: release/dist/
+          retention-days: 30
+
+  publish:
+    needs: build
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && needs.build.outputs.signed == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: multibot-release-${{ github.run_id }}
+          path: release/dist/
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ needs.build.outputs.version }}"
+          draft: ${{ (github.event_name == 'workflow_dispatch' && inputs.draft == true) || false }}
+          generate_release_notes: false
+          body: |
+            ## Multibot v${{ needs.build.outputs.version }}
+
+            - **APK** — Android app (Observatory). Install over USB (`adb install`)
+              or sideload.
+            - **botd payload** — the Termux Python daemon. The app's Setup Wizard
+              downloads this automatically and deploys it via `botd-install.sh`.
+            - **manifest.json** — version pins (F-Droid APKs, SHA-256, GPG
+              fingerprint). The wizard verifies these before installing anything.
+
+            ### Quick start
+            1. Install the APK.
+            2. Run the Setup Wizard (auto-installs Termux + Termux:API +
+               Termux:Boot from F-Droid, SHA-256 verified).
+            3. Grant the OpenAI-compatible endpoint (e.g. OpenRouter) in
+               Settings → Capabilities → Tools.
+            4. Create your first bot from the command palette.
+          files: release/dist/*
