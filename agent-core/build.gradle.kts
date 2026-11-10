@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.multibot.core"
+    namespace = "com.phonebot.core"
     compileSdk = 35
 
     defaultConfig {

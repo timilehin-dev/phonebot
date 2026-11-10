@@ -154,7 +154,7 @@ class SSHShellBackend(ShellBackend):
 
     Config supplies host/user/port; the auth method is the local user's
     default (key files in ``~/.ssh`` or a password env var
-    ``MULTIBOT_SSH_PASSWORD``).
+    ``PHONEBOT_SSH_PASSWORD``).
     """
 
     name = "ssh"
@@ -177,7 +177,7 @@ class SSHShellBackend(ShellBackend):
         """Create the asyncssh connection on first use (and on retry)."""
         import asyncssh  # lazy: optional dependency
 
-        password = os.environ.get("MULTIBOT_SSH_PASSWORD")
+        password = os.environ.get("PHONEBOT_SSH_PASSWORD")
         conn = await asyncssh.connect(
             self._host,
             port=self._port,

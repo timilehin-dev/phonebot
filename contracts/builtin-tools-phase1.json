@@ -281,7 +281,7 @@
     "kind": "builtin",
     "provider": "botd",
     "name": "bus_publish",
-    "description": "Publish an event to the multibot event bus. Phase 1: stub — events are logged to the invoking bot's trace stream only. Phase 2: full delivery to addressed bots' wakeup queues (cron_result, bot-to-bot messages).",
+    "description": "Publish an event to the phonebot event bus. Phase 1: stub — events are logged to the invoking bot's trace stream only. Phase 2: full delivery to addressed bots' wakeup queues (cron_result, bot-to-bot messages).",
     "input_schema": {
       "type": "object",
       "required": ["topic", "payload"],

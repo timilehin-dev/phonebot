@@ -7,9 +7,9 @@ line-buffered read is enough.
 
 Abstract namespace
 -----------------
-On Linux a socket address of the form ``b'\0multibot'`` (leading NUL) is an
+On Linux a socket address of the form ``b'\0phonebot'`` (leading NUL) is an
 *abstract* address: it does not exist in the filesystem and is namespaced
-across the whole system. The config stores the friendly name ``@multibot``;
+across the whole system. The config stores the friendly name ``@phonebot``;
 :meth:`IpcServer.raw_address` turns it into the bindable ``bytes``. On
 non-Linux (e.g. dev machines, Termux's Android is Linux but CI may not be),
 we transparently fall back to a ``/tmp`` filesystem socket so the skeleton
@@ -110,8 +110,8 @@ class LLMTransport(Protocol):
 def _abstract_or_path(name: str) -> tuple[bool, bytes]:
     """Return ``(abstract, address_bytes)`` for a friendly socket name.
 
-    ``@multibot`` on Linux -> ``(True, b'\\0multibot')``.
-    Elsewhere -> ``(False, b'/tmp/multibot.sock')`` (absolute path bytes).
+    ``@phonebot`` on Linux -> ``(True, b'\\0phonebot')``.
+    Elsewhere -> ``(False, b'/tmp/phonebot.sock')`` (absolute path bytes).
     """
     if name.startswith("@"):
         base = name[1:]
@@ -174,12 +174,12 @@ class IpcServer:
               "base_url": "https://api.openai.com/v1",
               "api_key_ref": "default",
               "model": "gpt-4o-mini",
-              "secrets_dir": "~/multibot/secrets",
+              "secrets_dir": "~/phonebot/secrets",
               "extra_headers": {}
             }
 
         ``api_key_ref`` maps to ``<secrets_dir>/<ref>.key`` when present,
-        else to the environment variable ``MULTIBOT_KEY_<REF>`` (uppercased),
+        else to the environment variable ``PHONEBOT_KEY_<REF>`` (uppercased),
         else to ``OPENAI_API_KEY``. This keeps secrets off the main config.
         """
         base_url = self.config.llm.base_url
@@ -209,11 +209,11 @@ class IpcServer:
         """Look up an API key: env first, then the named secrets file, then a default.
 
         Resolution order (first hit wins):
-          1. ``MULTIBOT_KEY_<REF>`` environment variable (REF uppercased, ``-`` -> ``_``).
+          1. ``PHONEBOT_KEY_<REF>`` environment variable (REF uppercased, ``-`` -> ``_``).
           2. ``<secrets_dir>/<ref>.key`` (or ``<home>/secrets/<ref>.key``).
           3. ``OPENAI_API_KEY`` as a last-resort fallback.
         """
-        env_var = "MULTIBOT_KEY_" + ref.upper().replace("-", "_")
+        env_var = "PHONEBOT_KEY_" + ref.upper().replace("-", "_")
         if os.environ.get(env_var):
             return os.environ[env_var]
         base = (

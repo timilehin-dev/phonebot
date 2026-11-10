@@ -1,6 +1,6 @@
 """Cron tick loop.
 
-:class:`CronScheduler` owns ``~/multibot/jobs.json`` and, every tick
+:class:`CronScheduler` owns ``~/phonebot/jobs.json`` and, every tick
 (default 30s), runs the *due* jobs in isolated :class:`AgentLoop`
 sessions. Each job runs fresh (no conversation history): the job prompt +
 its skill + the owning bot's soul/user/memory are the only context.
@@ -80,7 +80,7 @@ class CronScheduler:
     Parameters
     ----------
     home:
-        The multibot home dir; ``jobs.json`` lives here.
+        The phonebot home dir; ``jobs.json`` lives here.
     states:
         Mapping ``bot_name -> BotState`` for journalling results.
     runner:

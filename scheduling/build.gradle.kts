@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.multibot.schedule"
+    namespace = "com.phonebot.schedule"
     compileSdk = 35
     defaultConfig { minSdk = 33 }
     compileOptions {

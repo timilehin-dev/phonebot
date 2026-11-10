@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.multibot.app"
+    namespace = "com.phonebot.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.multibot.app"
+        applicationId = "com.phonebot.app"
         minSdk = 33
         targetSdk = 35
         versionCode = 1

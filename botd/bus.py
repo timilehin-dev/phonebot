@@ -85,7 +85,7 @@ class MessageBus:
     Parameters
     ----------
     home:
-        The multibot home dir; the shared journal lives at ``home/bus.jsonl``.
+        The phonebot home dir; the shared journal lives at ``home/bus.jsonl``.
     states:
         Mapping ``bot_name -> BotState``; used to journal per-bot wakeups.
         May be grown later (bots created on demand).

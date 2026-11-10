@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Multibot color palette. Exact hex from docs/design-tokens.md. -->
+<!-- Phonebot color palette. Exact hex from docs/design-tokens.md. -->
 <resources>
     <color name="mb_canvas">#0B0D10</color>
     <color name="mb_surface">#14171C</color>

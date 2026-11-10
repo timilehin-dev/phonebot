@@ -2,7 +2,7 @@
 
     * ``web.search``  - query a configurable search API endpoint. The
       endpoint + API key reference come from the environment
-      (``MULTIBOT_SEARCH_URL`` / ``MULTIBOT_SEARCH_KEY_REF``) or
+      (``PHONEBOT_SEARCH_URL`` / ``PHONEBOT_SEARCH_KEY_REF``) or
       ``endpoint.json``; when unconfigured the tool returns a clean
       "not configured" result instead of crashing the turn.
     * ``web.extract`` - fetch a URL and pull its main text out. Uses
@@ -114,8 +114,8 @@ class WebTools:
     # ------------------------------------------------------------------ #
     def _search_endpoint(self) -> Dict[str, str]:
         """Resolve the search API endpoint + key from env / endpoint.json."""
-        base_url = os.environ.get("MULTIBOT_SEARCH_URL", "")
-        key_ref = os.environ.get("MULTIBOT_SEARCH_KEY_REF", "")
+        base_url = os.environ.get("PHONEBOT_SEARCH_URL", "")
+        key_ref = os.environ.get("PHONEBOT_SEARCH_KEY_REF", "")
         ep_path = Path(self._config.home_path) / "endpoint.json"
         if ep_path.exists():
             try:
@@ -124,7 +124,7 @@ class WebTools:
                 key_ref = ep.get("search_key_ref", key_ref)
             except Exception:  # noqa: BLE001
                 log.warning("web: endpoint.json unreadable; using env defaults")
-        api_key = os.environ.get(f"MULTIBOT_KEY_{key_ref.upper().replace('-', '_')}") if key_ref else None
+        api_key = os.environ.get(f"PHONEBOT_KEY_{key_ref.upper().replace('-', '_')}") if key_ref else None
         return {"url": base_url, "api_key": api_key}
 
     async def web_search(self, query: str, max_results: int = 5) -> Dict[str, Any]:
@@ -138,7 +138,7 @@ class WebTools:
             return {
                 "ok": False,
                 "configured": False,
-                "error": "no search endpoint configured (set MULTIBOT_SEARCH_URL or endpoint.json search_url)",
+                "error": "no search endpoint configured (set PHONEBOT_SEARCH_URL or endpoint.json search_url)",
             }
         client = self._http()
         headers = {"X-Api-Key": endpoint["api_key"]} if endpoint["api_key"] else {}

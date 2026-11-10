@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "multibot:contracts/tool-descriptor.schema.json",
+  "$id": "phonebot:contracts/tool-descriptor.schema.json",
   "title": "ToolDescriptor",
-  "description": "Uniform descriptor for every tool in the multibot system: builtin, custom (bot-local), and MCP-provided. botd validates descriptors against this schema at registry load time; the app renders descriptors read-only.",
+  "description": "Uniform descriptor for every tool in the phonebot system: builtin, custom (bot-local), and MCP-provided. botd validates descriptors against this schema at registry load time; the app renders descriptors read-only.",
   "type": "object",
   "required": ["id", "kind", "name", "description", "input_schema", "risk", "phase"],
   "properties": {

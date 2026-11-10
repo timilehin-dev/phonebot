@@ -3,7 +3,7 @@
 
 This mirrors the *real device control path*. On the phone the app shells into
 Termux (Termux:API RUN_COMMAND) and runs ``python -m botd.cli <type> <args>``,
-which opens the ``@multibot`` abstract socket and talks to the running daemon.
+which opens the ``@phonebot`` abstract socket and talks to the running daemon.
 Here we:
 
 1. Spin up the botd ``IpcServer`` (a scratch home) in a background thread with

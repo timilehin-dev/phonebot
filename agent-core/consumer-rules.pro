@@ -7,7 +7,7 @@
 -keepattributes Signature
 
 # kotlinx.serialization model classes crossing the socket
--keep class com.multibot.core.** { *; }
+-keep class com.phonebot.core.** { *; }
 -keepclassmembers @kotlinx.serialization.Serializable class * {
     <init>(...);
 }

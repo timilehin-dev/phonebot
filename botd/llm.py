@@ -8,7 +8,7 @@ Two backends implement the :class:`botd.loop.LLMClient` protocol
   endpoint, including **OpenRouter** (``https://openrouter.ai/api/v1``), so a
   single ``base_url + api_key + model`` covers OpenAI, OpenRouter, DeepSeek,
   Kimi, self-hosted vLLM, Ollama gateways, etc. Credentials never live in the
-  config: they are resolved from ``~/multibot/secrets/<ref>.key`` or the
+  config: they are resolved from ``~/phonebot/secrets/<ref>.key`` or the
   environment (see :func:`resolve_endpoint`).
 
 * :class:`FakeLlmClient` - a deterministic, fully-offline stand-in used for
@@ -47,7 +47,7 @@ def resolve_endpoint(config: Config, home_path: Optional[Path] = None) -> Dict[s
     1. ``endpoint.json`` (in ``home_path`` or ``config.home_path``) overrides
        ``base_url`` / ``model`` / ``api_key_ref`` / ``extra_headers`` /
        ``secrets_dir``.
-    2. The key is read from ``MULTIBOT_KEY_<REF>`` env, then
+    2. The key is read from ``PHONEBOT_KEY_<REF>`` env, then
        ``<secrets_dir>/<ref>.key``, then ``OPENAI_API_KEY``.
 
     Returns ``{"base_url", "api_key", "model", "extra_headers", "api_key_ref"}``.
@@ -83,7 +83,7 @@ def resolve_endpoint(config: Config, home_path: Optional[Path] = None) -> Dict[s
 
 
 def _resolve_key(ref: str, secrets_dir: Optional[str], home: Path) -> Optional[str]:
-    env_var = "MULTIBOT_KEY_" + ref.upper().replace("-", "_")
+    env_var = "PHONEBOT_KEY_" + ref.upper().replace("-", "_")
     if os.environ.get(env_var):
         return os.environ[env_var]
     base = Path(os.path.expanduser(secrets_dir)) if secrets_dir else home / "secrets"
@@ -201,8 +201,8 @@ class OpenAICompatClient:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         # OpenRouter-friendly, harmless-to-others attribution headers:
-        headers.setdefault("HTTP-Referer", "https://github.com/multibot/multibot-android")
-        headers.setdefault("X-Title", "multibot-android")
+        headers.setdefault("HTTP-Referer", "https://github.com/phonebot/phonebot-android")
+        headers.setdefault("X-Title", "phonebot-android")
         return headers
 
     async def complete(

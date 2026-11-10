@@ -1,4 +1,4 @@
-# Multibot Design Tokens
+# Phonebot Design Tokens
 
 - **Version:** 1.0
 - **Status:** Accepted — normative for the app plane (Kotlin/Compose). botd-side tracing reuses the status colors where rendered in a terminal (ANSI mapping in §7).

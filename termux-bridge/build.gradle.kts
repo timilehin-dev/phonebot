@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.multibot.termux"
+    namespace = "com.phonebot.termux"
     compileSdk = 35
 
     defaultConfig { minSdk = 33 }

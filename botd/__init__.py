@@ -1,4 +1,4 @@
-"""botd - the multibot-android durable execution plane.
+"""botd - the phonebot-android durable execution plane.
 
 botd runs inside Termux on an Android phone. It is the *durable execution
 plane*: it owns the agent loops, the tool backends, the cron tick, the

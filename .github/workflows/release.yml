@@ -7,10 +7,10 @@
 #
 # Signing:
 #   Provide the keystore via repo secrets:
-#     MULTIBOT_KEYSTORE        (base64 of keystore file)
-#     MULTIBOT_KEYSTORE_PASS
-#     MULTIBOT_KEY_ALIAS
-#     MULTIBOT_KEY_PASS
+#     PHONEBOT_KEYSTORE        (base64 of keystore file)
+#     PHONEBOT_KEYSTORE_PASS
+#     PHONEBOT_KEY_ALIAS
+#     PHONEBOT_KEY_PASS
 #   Without them, the job builds an *unsigned* APK + the botd payload and
 #   uploads assets without publishing a release, so you can still grab the
 #   botd tarball/manifest.
@@ -68,17 +68,17 @@ jobs:
         run: |
           gradle wrapper --gradle-version 8.11.1 --no-daemon
           # Persist the wrapper so future CI runs don't need re-bootstrap.
-          git config user.name "multibot-ci"
-          git config user.email "ci@multibot.local"
+          git config user.name "phonebot-ci"
+          git config user.email "ci@phonebot.local"
           git add gradle/ gradlew gradlew.bat 2>/dev/null || true
           git diff --quiet || git commit -m "ci: add gradle wrapper"
 
       - name: Decode signing keystore (if secrets present)
         id: sign
         run: |
-          if [ -n "${{ secrets.MULTIBOT_KEYSTORE }}" ]; then
+          if [ -n "${{ secrets.PHONEBOT_KEYSTORE }}" ]; then
             mkdir -p signing
-            echo "${{ secrets.MULTIBOT_KEYSTORE }}" | base64 -d > "signing/multibot-release.keystore"
+            echo "${{ secrets.PHONEBOT_KEYSTORE }}" | base64 -d > "signing/phonebot-release.keystore"
             echo "signed=true" >> "$GITHUB_OUTPUT"
           else
             echo "signed=false" >> "$GITHUB_OUTPUT"
@@ -89,10 +89,10 @@ jobs:
         run: |
           if [ "${{ steps.sign.outputs.signed }}" = "true" ]; then
             ./gradlew --no-daemon assembleRelease \
-              -Psigning.storeFile=signing/multibot-release.keystore \
-              -Psigning.storePass="${{ secrets.MULTIBOT_KEYSTORE_PASS }}" \
-              -Psigning.keyAlias="${{ secrets.MULTIBOT_KEY_ALIAS }}" \
-              -Psigning.keyPass="${{ secrets.MULTIBOT_KEY_PASS }}"
+              -Psigning.storeFile=signing/phonebot-release.keystore \
+              -Psigning.storePass="${{ secrets.PHONEBOT_KEYSTORE_PASS }}" \
+              -Psigning.keyAlias="${{ secrets.PHONEBOT_KEY_ALIAS }}" \
+              -Psigning.keyPass="${{ secrets.PHONEBOT_KEY_PASS }}"
             echo "APK=app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_ENV"
           else
             echo "No keystore secrets — building unsigned APK (installable only with 'adb install -r')."
@@ -103,7 +103,7 @@ jobs:
       - name: Copy APK into release dir
         run: |
           mkdir -p release/dist
-          cp "$APK" release/dist/multibot-$(basename "$APK")
+          cp "$APK" release/dist/phonebot-$(basename "$APK")
           ls -la release/dist/
 
       - name: Pack botd payload + manifest
@@ -124,7 +124,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: multibot-release-${{ github.run_id }}
+          name: phonebot-release-${{ github.run_id }}
           path: release/dist/
           retention-days: 30
 
@@ -137,7 +137,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: multibot-release-${{ github.run_id }}
+          name: phonebot-release-${{ github.run_id }}
           path: release/dist/
 
       - name: Publish GitHub Release
@@ -147,7 +147,7 @@ jobs:
           draft: ${{ (github.event_name == 'workflow_dispatch' && inputs.draft == true) || false }}
           generate_release_notes: false
           body: |
-            ## Multibot v${{ needs.build.outputs.version }}
+            ## Phonebot v${{ needs.build.outputs.version }}
 
             - **APK** — Android app (Observatory). Install over USB (`adb install`)
               or sideload.

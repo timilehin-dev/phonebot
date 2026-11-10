@@ -1,6 +1,6 @@
 """Per-bot durable state for botd.
 
-Every bot owns a home directory under ``~/multibot/bots/<bot>/``:
+Every bot owns a home directory under ``~/phonebot/bots/<bot>/``:
 
     <bot_home>/
     ├── soul.md            # stable identity prompt

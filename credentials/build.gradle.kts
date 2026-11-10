@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.multibot.credentials"
+    namespace = "com.phonebot.credentials"
     compileSdk = 35
     defaultConfig { minSdk = 33 }
     compileOptions {

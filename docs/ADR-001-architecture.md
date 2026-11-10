@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-09
-- **Deciders:** Multibot Android core team
+- **Deciders:** Phonebot Android core team
 - **Supersedes:** (none)
 - **Related contracts:** [`contracts/tool-descriptor.schema.json`](../contracts/tool-descriptor.schema.json), [`contracts/invoke-envelope.schema.json`](../contracts/invoke-envelope.schema.json), [`contracts/builtin-tools-phase1.json`](../contracts/builtin-tools-phase1.json)
 
@@ -30,9 +30,9 @@ The product is a **phone-only** multi-bot AI agent system:
 
 **botd is the server; the app is the client.** All authoritative state lives on the botd side. The app may be reinstalled, updated, or briefly killed without loss of bot state. The app connects to botd and projects what it observes.
 
-### D2. Transport: `@multibot` abstract-namespace Unix socket
+### D2. Transport: `@phonebot` abstract-namespace Unix socket
 
-- Protocol: **newline-delimited JSON envelopes** over the abstract-namespace Unix socket `@multibot` (abstract namespace — no filesystem path, no `/tmp` collisions, no file-permission surface beyond socket peer checks).
+- Protocol: **newline-delimited JSON envelopes** over the abstract-namespace Unix socket `@phonebot` (abstract namespace — no filesystem path, no `/tmp` collisions, no file-permission surface beyond socket peer checks).
 - Envelope format is normative: see [`contracts/invoke-envelope.schema.json`](../contracts/invoke-envelope.schema.json). Requests and responses are the only message shapes; all other traffic is expressed as bus events published over the same socket.
 - Peer verification: botd checks `SO_PEERCRED` (UID) so only the app user and the Termux user may connect. The app uses its privileged peer connection to invoke tools and receive bus events.
 - Reconnect semantics: the app reconnects with exponential backoff and re-projects state from `state.json` / `sessions.db` snapshots; botd never trusts client-supplied authoritative state.
@@ -40,7 +40,7 @@ The product is a **phone-only** multi-bot AI agent system:
 ### D3. LLM: cloud-only, OpenAI-compatible
 
 - The model endpoint is a triple: **`base_url` + `api_key` + `model`**, OpenAI-compatible chat/completions API.
-- Stored at `~/multibot/endpoint.json`, `chmod 600`, owned by the Termux user.
+- Stored at `~/phonebot/endpoint.json`, `chmod 600`, owned by the Termux user.
 - botd calls the model over outbound HTTPS. No local inference, no hybrid routing.
 - Consequences:
   - Latency is network-bound; the UI treats model turns as asynchronous and streams deltas.
@@ -66,16 +66,16 @@ Scheduling is defense-in-depth; each layer covers the failure mode of the layer 
 
 1. **Layer 1 — botd clock + `termux-wake-lock`.** While the Termux session is alive and holds a wake lock, botd's internal clock fires jobs with sub-minute precision. This is the primary path for anything due inside the next few hours.
 2. **Layer 2 — API-31 exact alarms.** The app (holding `SCHEDULE_EXACT_ALARM` where permitted) schedules exact `AlarmManager` alarms for far-out or critical-future jobs, waking the device so botd can pick them up.
-3. **Layer 3 — WorkManager catch-up.** Best-effort periodic work that **reconciles** `~/multibot/jobs.json` on boot, on daemon restart, and on alarm delivery. If Layers 1–2 missed a job, this layer detects and executes it, recording `late=true` in the job history.
+3. **Layer 3 — WorkManager catch-up.** Best-effort periodic work that **reconciles** `~/phonebot/jobs.json` on boot, on daemon restart, and on alarm delivery. If Layers 1–2 missed a job, this layer detects and executes it, recording `late=true` in the job history.
 
-Job truth is `~/multibot/jobs.json` (see D7). No layer owns state; all layers read/write the file.
+Job truth is `~/phonebot/jobs.json` (see D7). No layer owns state; all layers read/write the file.
 
 ### D6. Per-bot home layout
 
-Each bot has a private home directory under `~/multibot/bots/<name>/`:
+Each bot has a private home directory under `~/phonebot/bots/<name>/`:
 
 ```
-~/multibot/bots/<name>/
+~/phonebot/bots/<name>/
 ├── soul.md        # bot identity, persona, standing instructions (read every session start)
 ├── user.md        # what the bot knows about its human user
 ├── memory.md      # curated long-term memory (bot edits via memory.update)
@@ -96,7 +96,7 @@ Rules:
 ### D7. Global state
 
 ```
-~/multibot/
+~/phonebot/
 ├── jobs.json      # all scheduled jobs (cron + one-shots), owner bot, last/next fire
 ├── endpoint.json  # LLM endpoint: { base_url, api_key, model } — chmod 600
 ├── mcp.json       # MCP server registry (plugins)
@@ -189,7 +189,7 @@ Settings
 One artifact per release on **GitHub Releases**:
 
 ```
-multibot-android-vX.Y.Z/
+phonebot-android-vX.Y.Z/
 ├── app-release.apk            # Compose app
 ├── botd/                     # Python payload: daemon, backends, scheduler
 └── manifest.json             # SHA-256 digests of every file + required Termux packages
@@ -199,7 +199,7 @@ First-run wizard flow (in the app):
 
 1. Verify `manifest.json` digests for every payload file.
 2. Offer/perform installation of **Termux**, **Termux:API**, and **Termux:Boot** from F-Droid, each **SHA-256 verified** against digests in `manifest.json` before handing the APK to `PackageInstaller`.
-3. Confirm a Termux session exists, boot `botd`, open the `@multibot` socket, and complete a handshake + capability probe (which backends actually resolve on this device).
+3. Confirm a Termux session exists, boot `botd`, open the `@phonebot` socket, and complete a handshake + capability probe (which backends actually resolve on this device).
 4. Create the user's first bot home and the global state tree (D6/D7).
 
 The wizard is idempotent: re-running on an existing install only re-verifies and re-handshakes.

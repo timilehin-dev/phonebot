@@ -1,4 +1,4 @@
-// Root build script for multibot-android.
+// Root build script for phonebot-android.
 // Kotlin 2.x + Compose BOM 2024+ + AGP 8.x. Application logic in :app,
 // shared agent primitives in :agent-core, Termux IPC in :termux-bridge.
 plugins {

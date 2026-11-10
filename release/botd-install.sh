@@ -5,19 +5,19 @@
 # RUN_COMMAND). It:
 #   1. verifies the unpacked payload,
 #   2. installs Python + pinned deps,
-#   3. lays out ~/multibot/{bots,secrets} + template files,
+#   3. lays out ~/phonebot/{bots,secrets} + template files,
 #   4. runs the selftest battery,
 #   5. starts the daemon (and registers Termux:Boot on first install).
 #
 # Idempotent: safe to re-run. Exits non-zero on any hard failure so the
 # wizard can mark the node failed.
 #
-# Usage (in Termux):  bash ~/multibot-install/install.sh
+# Usage (in Termux):  bash ~/phonebot-install/install.sh
 
 set -euo pipefail
 
 # Inside Termux, $HOME is the termux home (NOT the Android /data/data path).
-TARGET="$HOME/multibot"
+TARGET="$HOME/phonebot"
 INSTALLER_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 log() { printf '[botd-install] %s\n' "$*"; }
@@ -62,7 +62,7 @@ if [[ ! -e "$TARGET/endpoint.json" ]]; then
   "base_url": "https://api.openai.com/v1",
   "api_key_ref": "default",
   "model": "gpt-4o-mini",
-  "secrets_dir": "~/multibot/secrets",
+  "secrets_dir": "~/phonebot/secrets",
   "extra_headers": {}
 }
 JSON
@@ -76,7 +76,7 @@ fi
 if [[ ! -e "$TARGET/config.json" ]]; then
     cat > "$TARGET/config.json" <<'JSON'
 {
-  "socket_name": "@multibot",
+  "socket_name": "@phonebot",
   "llm": { "base_url": "https://api.openai.com/v1", "api_key_ref": "default", "model": "gpt-4o-mini", "mode": "auto" },
   "backend": { "shell": "termux", "python": "termux" },
   "max_concurrent_bots": 8,

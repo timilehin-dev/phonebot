@@ -12,7 +12,7 @@ Usage (from the repo root):
     py -3 test/run_smoketest.py                          # prompts (hidden input)
 
 On a real device (Termux) you'd instead just write the key to
-~/multibot/secrets/openrouter.key yourself and run
+~/phonebot/secrets/openrouter.key yourself and run
 `python -m botd.main --smoketest-llm`.
 """
 
@@ -57,8 +57,8 @@ def main() -> int:
     if not key:
         sys.exit("no key provided")
 
-    scratch = Path(tempfile.mkdtemp(prefix="multibot-smoke-"))
-    home = scratch / "multibot"
+    scratch = Path(tempfile.mkdtemp(prefix="phonebot-smoke-"))
+    home = scratch / "phonebot"
     (home / "bots").mkdir(parents=True, exist_ok=True)
     (home / "secrets").mkdir(parents=True, exist_ok=True)
 

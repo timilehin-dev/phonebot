@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# multibot-android — top-level build entrypoint.
+# phonebot-android — top-level build entrypoint.
 #
 # Usage:
 #   ./build.sh            # build debug APK (no signing)
@@ -40,9 +40,9 @@ case "$cmd" in
     ;;
   sign)
     need_gradle
-    [ -d signing ] || { echo "error: ./signing/ not found — create it with multibot-release.keystore" >&2; exit 1; }
+    [ -d signing ] || { echo "error: ./signing/ not found — create it with phonebot-release.keystore" >&2; exit 1; }
     "$GRADLE" assembleRelease \
-      -Psigning.storeFile="signing/multibot-release.keystore" \
+      -Psigning.storeFile="signing/phonebot-release.keystore" \
       -Psigning.storePass="${STORE_PASS:?SET STORE_PASS}" \
       -Psigning.keyAlias="${KEY_ALIAS:?SET KEY_ALIAS}" \
       -Psigning.keyPass="${KEY_PASS:?SET KEY_PASS}"

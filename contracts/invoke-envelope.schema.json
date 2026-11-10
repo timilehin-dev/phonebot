@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "multibot:contracts/invoke-envelope.schema.json",
+  "$id": "phonebot:contracts/invoke-envelope.schema.json",
   "title": "InvokeEnvelope",
-  "description": "Request/response envelope for tool invocation between the app (client) and botd (server) over the @multibot abstract-namespace Unix socket. Frames are newline-delimited JSON. One of Request or Response per frame.",
+  "description": "Request/response envelope for tool invocation between the app (client) and botd (server) over the @phonebot abstract-namespace Unix socket. Frames are newline-delimited JSON. One of Request or Response per frame.",
   "oneOf": [
     { "$ref": "#/$defs/Request" },
     { "$ref": "#/$defs/Response" }
@@ -28,7 +28,7 @@
           "properties": {
             "bot": {
               "type": "string",
-              "description": "Owning bot name (directory under ~/multibot/bots/)."
+              "description": "Owning bot name (directory under ~/phonebot/bots/)."
             },
             "session": {
               "type": "string",

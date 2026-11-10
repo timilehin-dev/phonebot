@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.multibot.wizard"
+    namespace = "com.phonebot.wizard"
     compileSdk = 35
     defaultConfig { minSdk = 33 }
     compileOptions {

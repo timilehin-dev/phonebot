@@ -12,4 +12,4 @@
     android:accessibilityFlags="flagDefaultNotification|flagReportViewIds"
     android:canRetrieveWindowContent="true"
     android:notificationTimeout="300"
-    android:settingsActivity="com.multibot.app.MainActivity" />
+    android:settingsActivity="com.phonebot.app.MainActivity" />

@@ -4,14 +4,14 @@ Usage
 -----
     python -m botd.main [--selftest] [--config PATH]
 
-* ``--config PATH`` - config location (default ``~/multibot/config.json``).
+* ``--config PATH`` - config location (default ``~/phonebot/config.json``).
 * ``--selftest``    - run the :mod:`botd.selftest` battery instead of
   starting the daemon, then exit 0/1.
 
 Normal start
 ------------
 1. Load + validate the config; create the home layout
-   (``~/multibot/{bots,secrets}``, ``jobs.json``, ``endpoint.json``) when
+   (``~/phonebot/{bots,secrets}``, ``jobs.json``, ``endpoint.json``) when
    missing.
 2. Build the object graph: bot store -> message bus -> IPC server -> tool
    registry -> scheduler (the scheduler is wired back into the bus for
@@ -49,14 +49,14 @@ from .tools import ToolRegistry
 
 log = logging.getLogger("botd")
 
-DEFAULT_CONFIG_PATH = os.path.expanduser("~/multibot/config.json")
+DEFAULT_CONFIG_PATH = os.path.expanduser("~/phonebot/config.json")
 
 #: Template written to ``endpoint.json`` when missing.
 ENDPOINT_TEMPLATE: Dict[str, Any] = {
     "base_url": "https://api.openai.com/v1",
     "api_key_ref": "default",
     "model": "gpt-4o-mini",
-    "secrets_dir": "~/multibot/secrets",
+    "secrets_dir": "~/phonebot/secrets",
     "extra_headers": {},
 }
 
@@ -70,7 +70,7 @@ JOBS_TEMPLATE: Dict[str, Any] = {"version": 1, "jobs": {}}
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     """Parse the daemon CLI: ``--selftest``, ``--smoketest-llm``, ``--config PATH``."""
-    parser = argparse.ArgumentParser(prog="botd", description="multibot-android durable execution plane")
+    parser = argparse.ArgumentParser(prog="botd", description="phonebot-android durable execution plane")
     parser.add_argument("--selftest", action="store_true", help="run the health-check battery and exit")
     parser.add_argument("--smoketest-llm", action="store_true",
                         help="drive the agent loop end-to-end against the LLM backend, then exit")

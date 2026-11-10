@@ -1,14 +1,14 @@
 """botd configuration.
 
 This module defines the validated configuration model for the botd daemon.
-Configuration lives at ``~/multibot/config.json`` by default. The module is
+Configuration lives at ``~/phonebot/config.json`` by default. The module is
 side-effect free at import time: it only defines dataclasses and pure
 functions. I/O happens exclusively through :meth:`Config.load` and
 :meth:`Config.save`, which main/selftest invoke explicitly.
 
 Design notes
 ------------
-* ``socket_name`` defaults to ``"@multibot"``. On Linux, an abstract-namespace
+* ``socket_name`` defaults to ``"@phonebot"``. On Linux, an abstract-namespace
   address is the prefix ``\0`` followed by a NUL-terminated name. We store the
   human friendly name here and build the raw ``bytes`` address in
   :class:`botd.ipc.IpcServer`.
@@ -32,8 +32,8 @@ from typing import Any, Dict, List, Optional
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_HOME = Path(os.path.expanduser("~/multibot"))
-DEFAULT_SOCKET_NAME = "@multibot"
+DEFAULT_HOME = Path(os.path.expanduser("~/phonebot"))
+DEFAULT_SOCKET_NAME = "@phonebot"
 DEFAULT_MAX_CONCURRENT_BOTS = 8
 DEFAULT_SPEND_CAP_PER_BOT_USD = 5.0
 DEFAULT_LLM_BASE_URL = "https://api.openai.com/v1"
@@ -119,8 +119,8 @@ class Config:
         Root of all botd-owned data: ``bots/``, ``secrets/``, ``jobs.json``,
         ``endpoint.json``.
     socket_name:
-        Friendly abstract-namespace socket name (``@multibot``). The raw bind
-        address (``\0multibot``) is derived from this in the IPC layer.
+        Friendly abstract-namespace socket name (``@phonebot``). The raw bind
+        address (``\0phonebot``) is derived from this in the IPC layer.
     llm:
         Cloud LLM endpoint configuration.
     backend:

@@ -41,7 +41,7 @@ async def _go() -> int:
     ctx = ToolContext(bot_name="toolcheck", llm=None)
 
     # Platform-neutral safe command: print a marker via the shell backend.
-    marker = "multibot-toolcheck-1"
+    marker = "phonebot-toolcheck-1"
     if os.name == "nt":
         safe_cmd = f"echo {marker}"
     else:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pack the release artifacts for multibot-android.
+"""Pack the release artifacts for phonebot-android.
 
 Produces, under ``release/dist/``:
 
@@ -171,7 +171,7 @@ def _sign(dist: Path, artifacts: List[Dict[str, Any]], manifest: Dict[str, Any])
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Pack multibot-android release assets")
+    parser = argparse.ArgumentParser(description="Pack phonebot-android release assets")
     parser.add_argument("--version", required=True, help="release version (e.g. 0.1.0)")
     parser.add_argument("--sign", action="store_true", help="GPG-sign artifacts if gpg is present")
     args = parser.parse_args()

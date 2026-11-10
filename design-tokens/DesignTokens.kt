@@ -1,11 +1,11 @@
-package com.multibot.design
+package com.phonebot.design
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 
 /**
- * Multibot design system — dark "instrument panel" (Linear + M3 Expressive + Liquid Glass).
+ * Phonebot design system — dark "instrument panel" (Linear + M3 Expressive + Liquid Glass).
  * App chrome is monochrome; each bot carries its own hue. Dark-only for now.
  *
  * Values mirror docs/design-tokens.md. Colors are exact hex; type specs are

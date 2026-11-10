@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  multibot-android manifest.
+  phonebot-android manifest.
   Design: app is the control/UI/credential plane; execution lives in Termux (botd).
   No Shizuku by default. No local LLM — cloud OpenAI-compatible only.
 -->
@@ -33,17 +33,17 @@
     <application
         android:name=".App"
         android:allowBackup="true"
-        android:label="Multibot"
+        android:label="Phonebot"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:theme="@style/Theme.Multibot"
+        android:theme="@style/Theme.Phonebot"
         android:supportsRtl="true">
 
         <!-- Single-activity Compose shell (MainActivity) — no launcher icon variant yet. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.Multibot"
+            android:theme="@style/Theme.Phonebot"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -75,10 +75,10 @@
           Accessibility service (device backend: assist/accessibility).
           The service itself is declared; enablement goes through the Settings intent
           (ACTION_ACCESSIBILITY_SETTINGS) — never auto-granted by the manifest.
-          TODO(Phase 2): wire .service.MultibotAccessibilityService + accessibility_config.xml.
+          TODO(Phase 2): wire .service.PhonebotAccessibilityService + accessibility_config.xml.
         -->
         <service
-            android:name=".service.MultibotAccessibilityService"
+            android:name=".service.PhonebotAccessibilityService"
             android:exported="false"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             tools:ignore="MissingClass">
@@ -97,7 +97,7 @@
         -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="com.multibot.app.fileprovider"
+            android:authorities="com.phonebot.app.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data

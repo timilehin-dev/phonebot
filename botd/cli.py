@@ -1,11 +1,11 @@
 """botd CLI — thin in-Termux client for the IPC control plane.
 
-The Android app cannot open the *abstract-namespace* socket ``@multibot`` from
+The Android app cannot open the *abstract-namespace* socket ``@phonebot`` from
 its own JVM process: ``java.net.UnixDomainSocketAddress`` is a
 filesystem-namespace API and cannot express a NUL-prefixed abstract address.
 So the device-reliable control path is:
 
-    app  --(Termux:API RUN_COMMAND)-->  Termux session  --(this client)-->  @multibot
+    app  --(Termux:API RUN_COMMAND)-->  Termux session  --(this client)-->  @phonebot
 
 ``botd/cli.py`` is the in-Termux half. It connects to the same address the
 daemon binds (via :func:`botd.ipc._abstract_or_path`, so the two can never
@@ -17,7 +17,7 @@ Usage
     python -m botd.cli <type> [json-args]   # send {"type": <type>, **args}
     python -m botd.cli ping                  # connect+close liveness probe
 
-Options: ``--config PATH`` (default ``~/multibot/config.json``) and
+Options: ``--config PATH`` (default ``~/phonebot/config.json``) and
 ``--timeout S`` (seconds; default 300 so a real ``llm_request`` that makes an
 HTTP call is not cut off).
 
@@ -102,12 +102,12 @@ def ping(config: Config, timeout_s: float) -> bool:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="botd.cli", description="multibot botd control-plane client")
+    p = argparse.ArgumentParser(prog="botd.cli", description="phonebot botd control-plane client")
     p.add_argument("command", nargs="?", default="ping",
                    help="an IPC message type (run_bot/approve/...) or 'ping'")
     p.add_argument("json_args", nargs="?", default="{}",
                    help="JSON object merged into the frame (default '{}')")
-    p.add_argument("--config", default=None, help="config path (default ~/multibot/config.json)")
+    p.add_argument("--config", default=None, help="config path (default ~/phonebot/config.json)")
     p.add_argument("--timeout", type=float, default=300.0, help="socket timeout in seconds")
     return p
 
@@ -116,7 +116,7 @@ def main(argv: Optional[Any] = None) -> int:
     args = build_parser().parse_args(argv)
 
     try:
-        config = Config.load(args.config)  # None -> default ~/multibot/config.json
+        config = Config.load(args.config)  # None -> default ~/phonebot/config.json
     except Exception as exc:  # noqa: BLE001 - a bad config is a clean exit-2
         print(f"botd.cli: config error: {exc}", file=sys.stderr)
         return 2

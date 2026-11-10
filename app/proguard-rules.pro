@@ -1,4 +1,4 @@
-# Multibot app — release ProGuard / R8 rules.
+# Phonebot app — release ProGuard / R8 rules.
 #
 # `proguard-android-optimize.txt` (default) already keeps all of the
 # application's own classes and most AndroidX. We only need the additions
@@ -45,9 +45,9 @@
 }
 
 # --- Our own model classes that cross the socket (kotlinx-serialized) ---
--keep class com.multibot.core.** { *; }
--keep class com.multibot.termux.** { *; }
--keep class com.multibot.credentials.** { *; }
+-keep class com.phonebot.core.** { *; }
+-keep class com.phonebot.termux.** { *; }
+-keep class com.phonebot.credentials.** { *; }
 
 # Keep the splash / service entry points.
--keep class com.multibot.app.service.BotdNudgeService { *; }
+-keep class com.phonebot.app.service.BotdNudgeService { *; }

@@ -1,4 +1,4 @@
-rootProject.name = "multibot-android"
+rootProject.name = "phonebot-android"
 
 include(":app")
 include(":agent-core")

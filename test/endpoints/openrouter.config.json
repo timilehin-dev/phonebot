@@ -1,6 +1,6 @@
 {
-  "home_path": "~/multibot",
-  "socket_name": "@multibot",
+  "home_path": "~/phonebot",
+  "socket_name": "@phonebot",
   "llm": {
     "base_url": "https://openrouter.ai/api/v1",
     "api_key_ref": "openrouter",

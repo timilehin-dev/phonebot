@@ -2,7 +2,7 @@
 
 Direct, *scoped* filesystem access: a bot may only touch paths inside
 (1) its own home dir, (2) the Termux home (``$HOME``), or (3) an explicit
-shared allowlist (``~/multibot/shared``). Scoping is enforced by
+shared allowlist (``~/phonebot/shared``). Scoping is enforced by
 resolving the requested path (following symlinks) and checking the
 resolved location against the allowed roots.
 
@@ -35,7 +35,7 @@ class FileTools:
     Parameters
     ----------
     config:
-        Global config (provides the multibot home for scoping).
+        Global config (provides the phonebot home for scoping).
     bot_homes:
         Callable ``bot_name -> Path`` resolving a bot's home dir. When
         None, a default that maps to ``<home>/bots/<name>`` is used.
