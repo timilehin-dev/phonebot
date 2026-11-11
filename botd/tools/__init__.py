@@ -418,6 +418,26 @@ class ToolRegistry:
             self._h_list_inbox,
         )
 
+        # --- create_bot (Phase 2 meta-tool) ---------------------------------
+        self.register(
+            ToolDescriptor(
+                id="create_bot",
+                description="Create a new bot (layout + state) and register it.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Bot identifier (directory name)."},
+                        "soul": {"type": "string", "description": "Optional identity markdown for soul.md."},
+                        "chief": {"type": "boolean", "description": "Designate as chief-of-staff."},
+                    },
+                    "required": ["name"],
+                },
+                risk=self._risk("write"),
+                backend="direct",
+            ),
+            self._h_create_bot,
+        )
+
         # Risk-escalation rules.
         # A shell command matching a destructive pattern -> destructive.
         self.add_risk_rule(
@@ -575,6 +595,32 @@ class ToolRegistry:
             return {"ok": False, "stub": True, "error": "state resolver not wired; Phase 2"}
         events = resolver(bot).list_wakeup(limit=limit)
         return {"ok": True, "bot": bot, "events": events}
+
+    async def _h_create_bot(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
+        """Phase 2: create a new bot's layout and state.json."""
+        name = str(args.get("name", "")).strip()
+        if not name:
+            return {"ok": False, "error": "name is required"}
+        resolver = self._state_resolver()
+        if resolver is None:
+            return {"ok": False, "error": "state resolver not wired"}
+        try:
+            state = resolver(name)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        state.ensure_layout()
+        soul = args.get("soul")
+        if soul:
+            (state.bot_dir / "soul.md").write_text(str(soul), encoding="utf-8")
+        chief = bool(args.get("chief", False))
+        def _merge(s: Dict[str, Any]) -> Dict[str, Any]:
+            merged = dict(s or {})
+            merged["role"] = "chief" if chief else merged.get("role", "bot")
+            merged.setdefault("paused", False)
+            merged.setdefault("spend_usd", 0.0)
+            return merged
+        state.with_state(_merge)
+        return {"ok": True, "bot": name, "created": True, "chief": chief}
 
     # ------------------------------------------------------------------ #
     # Risk evaluation

@@ -453,6 +453,22 @@ class AgentLoop:
                 "parameters": {"type": "object", "properties": {"bot": {"type": "string"}, "limit": {"type": "number"}}},
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "create_bot",
+                "description": "Create a new bot (layout + state) and register it (Phase 2).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "soul": {"type": "string"},
+                        "chief": {"type": "boolean"},
+                    },
+                    "required": ["name"],
+                },
+            },
+        },
     ]
 
     def _tool_descriptors(self) -> List[Dict[str, Any]]:

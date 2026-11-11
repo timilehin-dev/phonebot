@@ -137,6 +137,9 @@ class Config:
     backend: BackendConfig = field(default_factory=BackendConfig)
     max_concurrent_bots: int = DEFAULT_MAX_CONCURRENT_BOTS
     spend_cap_per_bot_usd: float = DEFAULT_SPEND_CAP_PER_BOT_USD
+    #: Name of the chief-of-staff bot (subscribes to every bus event).
+    #: ``None`` disables the chief-of-staff role entirely.
+    chief_bot: Optional[str] = "chief"
 
     # ------------------------------------------------------------------ #
     # Validation

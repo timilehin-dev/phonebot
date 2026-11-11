@@ -319,9 +319,21 @@ async def run_daemon(config: Config) -> int:
     dependency order.
     """
     store = BotStore(config)
-    # A chief-of-staff bot (e.g. "chief") subscribes to every bus event.
-    chief_bot = "chief" if (config.home_path / "bots" / "chief").exists() else None
-    bus = MessageBus(config.home_path, store.states, chief_bot=chief_bot)
+    # Chief-of-staff onboarding (Phase 2): ensure the chief bot exists so it
+    # can subscribe to every bus event and aggregate outcomes for the human.
+    chief_name = config.chief_bot
+    if chief_name:
+        chief_state = store.get_or_create(chief_name)
+        soul_path = chief_state.bot_dir / "soul.md"
+        if not soul_path.exists() or "a persistent agent running on a phone" in soul_path.read_text(encoding="utf-8"):
+            soul_path.write_text(
+                "# Soul\n"
+                "You are the chief-of-staff. You observe every bus event between\n"
+                "other bots, aggregate outcomes, and surface decisions the human\n"
+                "must make. You never execute risky work yourself; you delegate.\n",
+                encoding="utf-8",
+            )
+    bus = MessageBus(config.home_path, store.states, chief_bot=chief_name)
     ipc = IpcServer(config, state_store=store, bus=bus)
     # ``get_or_create`` doubles as the state resolver so tools that read
     # per-bot state (list_inbox, session search) work on a live daemon.
