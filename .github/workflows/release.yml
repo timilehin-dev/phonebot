@@ -155,8 +155,8 @@ jobs:
           body: |
             ## Phonebot v${{ needs.build.outputs.version }}
 
-            - **APK** — Android app (Observatory). Install over USB (`adb install`)
-              or sideload.
+            - **APK** — Android app (Observatory), Android 8+ (minSdk 26). Install
+              over USB (`adb install`) or sideload.
             - **botd payload** — the Termux Python daemon. The app's Setup Wizard
               downloads this automatically and deploys it via `botd-install.sh`.
             - **manifest.json** — version pins (F-Droid APKs, SHA-256, GPG

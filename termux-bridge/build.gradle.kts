@@ -8,7 +8,7 @@ android {
     namespace = "com.phonebot.termux"
     compileSdk = 35
 
-    defaultConfig { minSdk = 33 }
+    defaultConfig { minSdk = 26 }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

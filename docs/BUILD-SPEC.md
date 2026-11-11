@@ -264,7 +264,7 @@ hardware helpers via Termux:API (`termux-sms`, `termux-tts-speak`,
 
 ## 6. Android app (com.phonebot.app)
 
-Kotlin + Jetpack Compose, dark-only, minSdk 33, target/compile 35, Kotlin 2.x,
+Kotlin + Jetpack Compose, dark-only, minSdk 26 (Android 8+), target/compile 35, Kotlin 2.x,
 AGP 8.x. The app is the **control / UI / credentials plane only** — it never
 executes bot work locally.
 

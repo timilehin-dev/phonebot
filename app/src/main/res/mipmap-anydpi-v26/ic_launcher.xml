@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Adaptive launcher icon (minSdk 33, so anydpi-v26 covers all devices).
+<!-- Adaptive launcher icon (minSdk 26, so anydpi-v26 covers all devices).
      Motif: the "eye" of the Observatory — a ring + scanline dot. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/mb_icon_bg" />
