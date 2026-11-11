@@ -13,13 +13,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicReference
 
+/** Feedback shown after a roster action (success or failure). */
+data class ActionFeedback(val message: String, val isError: Boolean)
+
 /**
  * Process-level owner for the persistent Termux bridge (Phase 2).
  *
- * Keeps transport ([BridgeEventStream]), domain/store ([BridgeEventStore]), and
- * UI bindings decoupled: the stream only delivers raw lines, the store owns the
- * approvals inbox state and corr_id resolution, and UI observes [pendingApprovals]
- * and invokes [approve]/[deny].
+ * Layers stay separate: [BridgeEventStream] is transport (raw JSON lines),
+ * [BridgeEventStore] is the approvals domain (corr_id inbox + resolution), and
+ * this runtime exposes plain state ([pendingApprovals], [roster],
+ * [actionFeedback]) for the Compose UI. Screens never see SSH or JSON.
  */
 object BridgeRuntime {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -28,8 +31,26 @@ object BridgeRuntime {
     private val storeRef = AtomicReference<BridgeEventStore?>(null)
     private val clientRef = AtomicReference<BotdSshClient?>(null)
 
+    @Volatile
+    private var approvalObserver: ApprovalObserver? = null
+
     private val _pendingApprovals = MutableStateFlow<List<ApprovalRequest>>(emptyList())
     val pendingApprovals: StateFlow<List<ApprovalRequest>> = _pendingApprovals.asStateFlow()
+
+    /** null until the first roster fetch completes. */
+    private val _roster = MutableStateFlow<RosterSnapshot?>(null)
+    val roster: StateFlow<RosterSnapshot?> = _roster.asStateFlow()
+
+    private val _busyBot = MutableStateFlow<String?>(null)
+    val busyBot: StateFlow<String?> = _busyBot.asStateFlow()
+
+    private val _actionFeedback = MutableStateFlow<ActionFeedback?>(null)
+    val actionFeedback: StateFlow<ActionFeedback?> = _actionFeedback.asStateFlow()
+
+    /** Wire approval notifications (called once from Application). */
+    fun setApprovalObserver(observer: ApprovalObserver?) {
+        approvalObserver = observer
+    }
 
     @Synchronized
     fun start(
@@ -43,7 +64,7 @@ object BridgeRuntime {
         val client = BotdSshClient(host, port, user, auth, botdHome)
         val store = BridgeEventStore(
             cli = client,
-            onEvent = { /* observability hook; UI can evolve independently */ },
+            onEvent = { /* observability hook; UI evolves independently */ },
             onError = { _, _ -> },
         )
         val stream = BridgeEventStream(
@@ -52,41 +73,99 @@ object BridgeRuntime {
             user = user,
             botdHome = botdHome,
             auth = auth,
-            onLine = { line ->
-                store.onBridgeLine(line)
-                _pendingApprovals.value = store.pendingApprovals.value
-            },
-            onError = { /* transport hiccup; stream will reconnect while running */ },
+            onLine = { line -> handleBridgeLine(store, line) },
+            onError = { /* transport hiccup; the stream reconnects while running */ },
         )
         clientRef.set(client)
         storeRef.set(store)
         streamRef.set(stream)
-        // Seed with current (empty) state and start the persistent subscriber.
-        _pendingApprovals.value = store.pendingApprovals.value
         stream.connect()
+        refreshRoster()
     }
 
-    fun approve(corrId: String, onResult: (Result<Unit>) -> Unit = {}) {
+    private fun handleBridgeLine(store: BridgeEventStore, line: String) {
+        store.onBridgeLine(line)
+        val pending = store.pendingApprovals.value
+        _pendingApprovals.value = pending
+        approvalObserver?.onPending(pending)
+    }
+
+    fun approve(corrId: String, onResult: (Result<Unit>) -> Unit = {}) =
+        resolveApproval(corrId, approve = true, onResult = onResult)
+
+    fun deny(corrId: String, onResult: (Result<Unit>) -> Unit = {}) =
+        resolveApproval(corrId, approve = false, onResult = onResult)
+
+    private fun resolveApproval(corrId: String, approve: Boolean, onResult: (Result<Unit>) -> Unit) {
         val store = storeRef.get() ?: run {
             onResult(Result.failure(IllegalStateException("bridge not started")))
             return
         }
         scope.launch {
-            val res = store.approve(corrId)
+            val result = if (approve) store.approve(corrId) else store.deny(corrId)
             _pendingApprovals.value = store.pendingApprovals.value
-            onResult(res)
+            if (result.isSuccess) approvalObserver?.onResolved(corrId)
+            onResult(result)
         }
     }
 
-    fun deny(corrId: String, onResult: (Result<Unit>) -> Unit = {}) {
-        val store = storeRef.get() ?: run {
-            onResult(Result.failure(IllegalStateException("bridge not started")))
+    /** Fetch the roster from botd's `get_state`; updates [roster] on completion. */
+    @JvmOverloads
+    fun refreshRoster(onResult: (Result<RosterSnapshot>) -> Unit = {}) {
+        val client = clientRef.get()
+        if (client == null) {
+            val snapshot = RosterSnapshot(online = false, error = "bridge not started")
+            _roster.value = snapshot
+            onResult(Result.failure(IllegalStateException(snapshot.error)))
             return
         }
         scope.launch {
-            val res = store.deny(corrId)
-            _pendingApprovals.value = store.pendingApprovals.value
-            onResult(res)
+            val snapshot = try {
+                val reply = client.cli("get_state", "{}")
+                RosterMapper.fromState(reply, _pendingApprovals.value)
+            } catch (t: Throwable) {
+                RosterSnapshot(online = false, error = t.message ?: "get_state failed")
+            }
+            _roster.value = snapshot
+            onResult(
+                if (snapshot.online) Result.success(snapshot)
+                else Result.failure(IllegalStateException(snapshot.error ?: "botd offline")),
+            )
+        }
+    }
+
+    fun runBot(bot: String) = control("run", "run_bot", bot)
+    fun pauseBot(bot: String) = control("pause", "pause_bot", bot)
+    fun resumeBot(bot: String) = control("resume", "resume_bot", bot)
+
+    fun dismissActionFeedback() {
+        _actionFeedback.value = null
+    }
+
+    /** One roster mutation, then refresh so the UI shows what botd actually reports. */
+    private fun control(verb: String, ipcType: String, bot: String) {
+        val client = clientRef.get()
+        if (client == null) {
+            _actionFeedback.value = ActionFeedback("$verb failed: bridge not started", isError = true)
+            return
+        }
+        _busyBot.value = bot
+        _actionFeedback.value = null
+        scope.launch {
+            val result = runCatching {
+                val reply = client.cli(ipcType, """{"bot":${jsonString(bot)}}""")
+                if (reply?.ok != true) error(reply?.error ?: "$verb failed")
+            }
+            _busyBot.value = null
+            if (result.isSuccess) {
+                _actionFeedback.value = ActionFeedback("${verb.replaceFirstChar { it.titlecase() }} · $bot", isError = false)
+                refreshRoster()
+            } else {
+                _actionFeedback.value = ActionFeedback(
+                    "$verb failed · $bot: ${result.exceptionOrNull()?.message ?: "unknown error"}",
+                    isError = true,
+                )
+            }
         }
     }
 
@@ -96,5 +175,11 @@ object BridgeRuntime {
         storeRef.set(null)
         clientRef.set(null)
         _pendingApprovals.value = emptyList()
+        _roster.value = null
+        _busyBot.value = null
+        _actionFeedback.value = null
     }
+
+    private fun jsonString(value: String): String =
+        "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 }

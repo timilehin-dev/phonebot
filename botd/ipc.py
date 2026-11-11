@@ -423,6 +423,10 @@ class IpcServer:
                         "paused": bool(flags.get("paused", False)),
                         "spend_usd": float(flags.get("spend_usd", 0.0)),
                         "pending_wakeup": bs.wakeup_count(),
+                        # Display-only hints for the app roster (Phase 2); absent
+                        # unless a turn/tool recorded them in state.json.
+                        "current_task": str(flags.get("current_task") or flags.get("activity") or ""),
+                        "last_activity": str(flags.get("last_activity") or ""),
                     }
                 )
         return {"type": "state", "corr_id": msg.get("corr_id"), "bots": bots}

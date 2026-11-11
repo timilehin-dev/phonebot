@@ -3,7 +3,9 @@ package com.phonebot.app
 import android.app.Application
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.phonebot.app.bridge.ApprovalNotificationCoordinator
 import com.phonebot.app.bridge.BridgeRuntime
+import com.phonebot.app.bridge.SystemApprovalNotifier
 import com.phonebot.credentials.SecretVault
 
 /**
@@ -34,6 +36,10 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         secretVault = SecretVault(this)
+        // needs-approval -> one high-priority notification (deduped, cancelled on resolve).
+        BridgeRuntime.setApprovalObserver(
+            ApprovalNotificationCoordinator(SystemApprovalNotifier(this))
+        )
         // Start the persistent bridge subscriber (best-effort). It reconnects until
         // botd/sshd becomes reachable with configured credentials.
         BridgeRuntime.start()

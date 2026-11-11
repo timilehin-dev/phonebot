@@ -139,6 +139,19 @@ class BotStore:
 # Scheduler (CronRunner + trigger/wakeup routing)
 # ---------------------------------------------------------------------------
 
+def _mark_current_task(state: BotState, task: str) -> None:
+    """Record the in-flight task so the app roster can show it via get_state."""
+    snippet = " ".join(str(task or "").split())
+    if len(snippet) > 200:
+        snippet = snippet[:197] + "..."
+    state.with_state(lambda s: {**s, "current_task": snippet})
+
+
+def _clear_current_task(state: BotState) -> None:
+    """Clear the in-flight task once the turn finishes (success or failure)."""
+    state.with_state(lambda s: {**s, "current_task": ""})
+
+
 class BotScheduler:
     """Runs isolated agent sessions: cron jobs, app triggers, urgent wakes.
 
@@ -196,7 +209,11 @@ class BotScheduler:
                 # a second, placeholder event here.
                 return AgentLoop.isolated_result(None, "bot paused; job buffered")
             agent = AgentLoop(state, self.config, self.ipc, self.tools)
-            result = await agent.run_turn(TriggerEvent(kind="user_message", payload=prompt))
+            _mark_current_task(state, job.get("prompt") or job.get("skill") or "cron job")
+            try:
+                result = await agent.run_turn(TriggerEvent(kind="user_message", payload=prompt))
+            finally:
+                _clear_current_task(state)
         return AgentLoop.isolated_result(result.get("content"), None)
 
     # ------------------------------------------------------------------ #
@@ -242,7 +259,11 @@ class BotScheduler:
                 payload=message if message is not None else queued,
             )
             agent = AgentLoop(state, self.config, self.ipc, self.tools)
-            result = await agent.run_turn(event)
+            _mark_current_task(state, message if message is not None else str(queued or ""))
+            try:
+                result = await agent.run_turn(event)
+            finally:
+                _clear_current_task(state)
             if queued is not None:
                 state.drain_wakeup()
         return {"ok": True, "content": result.get("content"), "session_id": result.get("session_id")}

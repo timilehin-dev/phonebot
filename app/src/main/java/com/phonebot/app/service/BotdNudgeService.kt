@@ -16,6 +16,11 @@ import android.os.IBinder
  * without a live Termux socket. The notification channels must be created
  * before startForeground — done lazily here for API 26+.
  *
+ * Approval alerts are NOT posted from this service: those are raised by
+ * `com.phonebot.app.bridge.SystemApprovalNotifier` (high-importance `approvals`
+ * channel, deep-links into the Approvals view) as `needs-approval` bus events
+ * arrive over the persistent bridge.
+ *
  * TODO(Phase 2):
  *  - start Termux (Termux:Boot profile) + the botd daemon
  *  - ping the @phonebot socket to confirm liveness
