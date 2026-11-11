@@ -126,6 +126,50 @@ def main(argv: Optional[Any] = None) -> int:
         print(json.dumps({"type": "ack", "ok": ok}))
         return 0 if ok else 1
 
+    if args.command == "subscribe":
+        # Persistent subscriber channel: connect, subscribe, then stream every
+        # bus_event frame the daemon pushes until the connection closes.
+        try:
+            sock = connect(_resolve_address(config), args.timeout)
+        except (OSError, RuntimeError) as exc:
+            print(json.dumps({"type": "error", "code": "connect_failed", "message": str(exc)}))
+            return 1
+        sock.settimeout(None)
+        try:
+            frame = {"type": "subscribe", "corr_id": uuid.uuid4().hex}
+            sock.sendall((json.dumps(frame, ensure_ascii=False) + "\n").encode("utf-8"))
+            # Read the ack (single line).
+            buf = b""
+            while b"\n" not in buf:
+                chunk = sock.recv(65536)
+                if not chunk:
+                    break
+                buf += chunk
+            if buf:
+                sys.stdout.write(buf.decode("utf-8", "replace"))
+                sys.stdout.flush()
+                buf = b""
+            # Stream subsequent frames.
+            while True:
+                chunk = sock.recv(65536)
+                if not chunk:
+                    break
+                buf += chunk
+                while b"\n" in buf:
+                    line, buf = buf.split(b"\n", 1)
+                    if line.strip():
+                        sys.stdout.write(line.decode("utf-8", "replace") + "\n")
+                        sys.stdout.flush()
+        except (OSError, RuntimeError) as exc:
+            print(json.dumps({"type": "error", "code": "stream_error", "message": str(exc)}))
+            return 1
+        finally:
+            try:
+                sock.close()
+            except OSError:
+                pass
+        return 0
+
     try:
         extra = json.loads(args.json_args) if args.json_args else {}
         if not isinstance(extra, dict):

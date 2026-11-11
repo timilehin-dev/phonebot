@@ -106,6 +106,10 @@ dependencies {
     // Local project modules
     implementation(project(":agent-core"))
     implementation(project(":termux-bridge"))
+    implementation(project(":termux-bridge")) {
+        // expose the new bridge event stream + event store to the app module
+        // so that TermuxBridge / ApprovalsScreen can import them.
+    }
     implementation(project(":scheduling"))
     implementation(project(":credentials"))
     implementation(project(":wizard"))

@@ -39,6 +39,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.runtime.collectAsState
+import com.phonebot.app.bridge.BridgeRuntime
 import com.phonebot.app.ui.approvals.ApprovalsScreen
 import com.phonebot.app.ui.observatory.ObservatoryScreen
 import com.phonebot.app.ui.palette.CommandPaletteOverlay
@@ -117,7 +119,15 @@ private object CapabilitiesRoute : SettingsRoute {
 
 private object ApprovalsRoute : SettingsRoute {
     override val title = "Approvals"
-    @Composable override fun render(onBack: () -> Unit) = ApprovalsScreen(onBack = onBack)
+    @Composable override fun render(onBack: () -> Unit) {
+        val pending by BridgeRuntime.pendingApprovals.collectAsState()
+        ApprovalsScreen(
+            pending = pending,
+            onApprove = { corrId -> BridgeRuntime.approve(corrId) },
+            onDeny = { corrId -> BridgeRuntime.deny(corrId) },
+            onBack = onBack,
+        )
+    }
 }
 
 private object SetupRoute : SettingsRoute {

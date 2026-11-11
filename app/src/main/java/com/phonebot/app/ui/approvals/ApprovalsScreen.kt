@@ -2,6 +2,7 @@ package com.phonebot.app.ui.approvals
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,16 +15,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,45 +30,42 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.phonebot.design.DesignTokens
+import com.phonebot.termux.ApprovalRequest
+import com.phonebot.termux.ApprovalRisk
 
 /**
  * ApprovalsScreen — risk-tiered list of pending human decisions.
  *
- *  Legend (top):
- *   ·  INFO      — informational, no action needed (grey)
- *   ·  CONFIRM   — routine action, one-tap confirm (blue)
- *   ·  CRITICAL  — irreversible / destructive, expanded card with Approve/Deny/Ask
- *
- *  Expanded critical card:
- *   - Bot name + command in a mono block
- *   - Three action buttons: Approve / Deny / Ask (defer to next cycle)
- *
- *  Collapsed confirm cards: single-tap row with checkmark.
- *
- * Phase 1: placeholder items; live queue arrives from botd RPC in Phase 2.
+ * Bound to the app-level approvals store (Phase 2): live `needs-approval`
+ * bus events appear here and Approve/Deny resolve by `corr_id` to resume
+ * or deny the suspended tool call. UI remains decoupled from transport and
+ * from the store implementation via plain state + callbacks.
  */
 @Composable
-fun ApprovalsScreen(onBack: () -> Unit = {}) {
-    val t = DesignTokens
-    var expandedCritical by remember { mutableStateOf(true) }
-    var confirmState by remember { mutableStateOf(false) }
-
+fun ApprovalsScreen(
+    pending: List<ApprovalRequest>,
+    onApprove: (corrId: String) -> Unit,
+    onDeny: (corrId: String) -> Unit,
+    onBack: () -> Unit = {},
+) {
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = DesignTokens.Density.ScreenPad.dp),
         verticalArrangement = Arrangement.spacedBy(DesignTokens.Density.CardGap.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 96.dp),
     ) {
-        // Header
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Approvals", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.weight(1f))
-                Text("3 pending", style = MaterialTheme.typography.labelSmall, color = DesignTokens.Chrome.TextFaint)
+                Text(
+                    "${pending.size} pending",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = DesignTokens.Chrome.TextFaint,
+                )
             }
             Spacer(Modifier.height(8.dp))
         }
 
-        // Legend
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 LegendDot(Color(0xFF5A6272), "info")
@@ -80,29 +75,48 @@ fun ApprovalsScreen(onBack: () -> Unit = {}) {
             Spacer(Modifier.height(4.dp))
         }
 
-        // Critical cards (expanded)
-        items(placeholderCritical.size) { i ->
-            val req = placeholderCritical[i]
-            CriticalApprovalCard(req, expanded = expandedCritical)
+        if (pending.isEmpty()) {
+            item {
+                Surface(
+                    shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
+                    color = DesignTokens.Surfaces.SurfaceContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            "No pending approvals",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = DesignTokens.Chrome.TextSecondary,
+                        )
+                        Text(
+                            "Live needs-approval events from botd will appear here when the bridge is connected.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = DesignTokens.Chrome.TextFaint,
+                        )
+                    }
+                }
+            }
+        } else {
+            items(pending, key = { it.corrId }) { req ->
+                when (req.risk) {
+                    ApprovalRisk.Critical -> CriticalApprovalCard(
+                        req = req,
+                        onApprove = { onApprove(req.corrId) },
+                        onDeny = { onDeny(req.corrId) },
+                    )
+                    ApprovalRisk.Confirm -> ConfirmApprovalRow(
+                        req = req,
+                        onApprove = { onApprove(req.corrId) },
+                        onDeny = { onDeny(req.corrId) },
+                    )
+                    ApprovalRisk.Info -> InfoApprovalRow(req)
+                }
+            }
         }
 
-        // Confirm cards (collapsed, one-tap)
-        items(placeholderConfirm.size) { i ->
-            val req = placeholderConfirm[i]
-            ConfirmApprovalRow(req, approved = confirmState && i == 0)
-        }
-
-        // Info rows
-        items(placeholderInfo.size) { i ->
-            InfoApprovalRow(placeholderInfo[i])
-        }
         item { Spacer(Modifier.height(8.dp)) }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Legend
-// ---------------------------------------------------------------------------
 
 @Composable
 private fun LegendDot(color: Color, label: String) {
@@ -113,108 +127,80 @@ private fun LegendDot(color: Color, label: String) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Placeholder data
-// ---------------------------------------------------------------------------
-
-private data class ApprovalRequest(
-    val id: String,
-    val bot: String,
-    val botHue: Color,
-    val command: String,
-    val detail: String,
-)
-
-private val placeholderCritical = listOf(
-    ApprovalRequest("c1", "sable", DesignTokens.BotHues.H1,
-        "rm -rf /data/data/com.myapp/files/build/",
-        "Sable wants to clear the build directory before the nightly deploy"),
-    ApprovalRequest("c2", "atlas", DesignTokens.BotHues.H0,
-        "DROP TABLE price_snapshots_2025;",
-        "Atlas is decommissioning the 2025 price snapshot table"),
-)
-
-private val placeholderConfirm = listOf(
-    ApprovalRequest("f1", "vex", DesignTokens.BotHues.H2,
-        "curl -s https://api.example.com/deploy -X POST",
-        "Vex is triggering the staging deploy"),
-    ApprovalRequest("f2", "onyx", DesignTokens.BotHues.H3,
-        "termux-sms 555-0101 \"Build passed\"",
-        "Onyx is sending a status SMS"),
-)
-
-private val placeholderInfo = listOf(
-    ApprovalRequest("i1", "vex", DesignTokens.BotHues.H2,
-        "log: nightly digest compiled · 0 warnings", "Informational only"),
-)
-
-// ---------------------------------------------------------------------------
-// Card composables
-// ---------------------------------------------------------------------------
-
-/**
- * Critical approval card: expanded by default. Shows the command in a
- * monospace block plus Approve / Deny / Ask buttons.
- */
 @Composable
-private fun CriticalApprovalCard(req: ApprovalRequest, expanded: Boolean) {
-    val t = DesignTokens
+private fun CriticalApprovalCard(
+    req: ApprovalRequest,
+    onApprove: () -> Unit,
+    onDeny: () -> Unit,
+) {
     Surface(
         shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
         color = DesignTokens.Surfaces.Surface,
-        modifier = Modifier.fillMaxWidth().borderCritical(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = DesignTokens.Status.Critical.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(20.dp),
+            ),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).background(req.botHue, CircleShape))
+                Box(Modifier.size(8.dp).background(DesignTokens.Status.Critical, CircleShape))
                 Spacer(Modifier.width(6.dp))
                 Text(req.bot, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
                 Surface(shape = RoundedCornerShape(4.dp), color = DesignTokens.Status.Critical.copy(alpha = 0.18f)) {
-                    Text(" CRITICAL ", Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall, color = DesignTokens.Status.Critical,
-                        fontWeight = FontWeight.Bold)
-                }
-            }
-            if (expanded) {
-                // Mono command block
-                Surface(shape = RoundedCornerShape(DesignTokens.Shape.BlockRadius), color = DesignTokens.Surfaces.Background) {
                     Text(
-                        req.command,
-                        Modifier.padding(10.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
+                        " CRITICAL ",
+                        Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
                         color = DesignTokens.Status.Critical,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
+            }
+            Surface(shape = RoundedCornerShape(DesignTokens.Shape.BlockRadius), color = DesignTokens.Surfaces.Background) {
+                Text(
+                    req.command,
+                    Modifier.padding(10.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = DesignTokens.Status.Critical,
+                )
+            }
+            if (req.detail.isNotBlank()) {
                 Text(req.detail, style = MaterialTheme.typography.bodySmall, color = DesignTokens.Chrome.TextSecondary)
-                // Action buttons
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ApprovalButton("Approve", DesignTokens.Status.Ok, Modifier.weight(1f))
-                    ApprovalButton("Deny", DesignTokens.Status.Critical, Modifier.weight(1f))
-                    ApprovalButton("Ask", DesignTokens.Status.Waiting, Modifier.weight(1f))
-                }
-                // TODO: wire Approve/Deny/Ask to the botd approval RPC (Phase 2).
+            }
+            Text(
+                "corr_id: ${req.corrId}",
+                style = MaterialTheme.typography.labelSmall,
+                color = DesignTokens.Chrome.TextFaint,
+                fontFamily = FontFamily.Monospace,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ApprovalButton("Approve", DesignTokens.Status.Ok, Modifier.weight(1f), onClick = onApprove)
+                ApprovalButton("Deny", DesignTokens.Status.Critical, Modifier.weight(1f), onClick = onDeny)
             }
         }
     }
 }
 
 @Composable
-private fun Modifier.borderCritical(): Modifier =
-    this.border(width = 1.dp, color = DesignTokens.Status.Critical.copy(alpha = 0.5f), shape = RoundedCornerShape(20.dp))
-
-@Composable
-private fun ApprovalButton(label: String, color: Color, modifier: Modifier = Modifier) {
-    val t = DesignTokens
+private fun ApprovalButton(
+    label: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     Surface(
-        modifier = modifier,
+        modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(DesignTokens.Shape.BlockRadius),
         color = color.copy(alpha = 0.15f),
     ) {
         Text(
             label,
-            Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            Modifier.fillMaxWidth().padding(vertical = 10.dp),
             style = MaterialTheme.typography.labelMedium,
             color = color,
             fontWeight = FontWeight.Bold,
@@ -223,46 +209,68 @@ private fun ApprovalButton(label: String, color: Color, modifier: Modifier = Mod
     }
 }
 
-/** Collapsed confirm row — single tap. */
 @Composable
-private fun ConfirmApprovalRow(req: ApprovalRequest, approved: Boolean) {
-    val t = DesignTokens
+private fun ConfirmApprovalRow(
+    req: ApprovalRequest,
+    onApprove: () -> Unit,
+    onDeny: () -> Unit,
+) {
     Surface(
         shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
-        color = if (approved) DesignTokens.Surfaces.Surface else DesignTokens.Surfaces.SurfaceContainer,
+        color = DesignTokens.Surfaces.SurfaceContainer,
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(8.dp).background(
-                if (approved) DesignTokens.Status.Ok else DesignTokens.Status.Waiting, CircleShape))
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text(req.bot, style = MaterialTheme.typography.titleSmall)
-                Text(req.command, style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace, color = DesignTokens.Chrome.TextFaint, maxLines = 1)
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(8.dp).background(DesignTokens.Status.Waiting, CircleShape))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(req.bot, style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        req.command,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = DesignTokens.Chrome.TextFaint,
+                        maxLines = 2,
+                    )
+                }
             }
-            Spacer(Modifier.weight(1f))
+            if (req.detail.isNotBlank()) {
+                Text(req.detail, style = MaterialTheme.typography.bodySmall, color = DesignTokens.Chrome.TextSecondary)
+            }
             Text(
-                if (approved) "✓ approved" else "confirm",
+                "corr_id: ${req.corrId}",
                 style = MaterialTheme.typography.labelSmall,
-                color = if (approved) DesignTokens.Status.Ok else DesignTokens.Status.Waiting,
+                color = DesignTokens.Chrome.TextFaint,
+                fontFamily = FontFamily.Monospace,
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ApprovalButton("Approve", DesignTokens.Status.Ok, Modifier.weight(1f), onClick = onApprove)
+                ApprovalButton("Deny", DesignTokens.Status.Critical, Modifier.weight(1f), onClick = onDeny)
+            }
         }
     }
 }
 
-/** Info-only row, no action. */
 @Composable
 private fun InfoApprovalRow(req: ApprovalRequest) {
-    val t = DesignTokens
-    Surface(shape = RoundedCornerShape(DesignTokens.Shape.CardRadius), color = DesignTokens.Surfaces.Surface) {
+    Surface(
+        shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
+        color = DesignTokens.Surfaces.Surface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).background(DesignTokens.Chrome.TextFaint, CircleShape))
             Spacer(Modifier.width(10.dp))
-            Text(req.command, style = MaterialTheme.typography.bodySmall,
-                color = DesignTokens.Chrome.TextSecondary, maxLines = 1)
+            Column {
+                Text(req.bot, style = MaterialTheme.typography.labelMedium, color = DesignTokens.Chrome.TextSecondary)
+                Text(
+                    req.command,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = DesignTokens.Chrome.TextSecondary,
+                    maxLines = 2,
+                )
+            }
         }
     }
 }
