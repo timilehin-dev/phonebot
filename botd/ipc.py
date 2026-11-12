@@ -283,19 +283,35 @@ class IpcServer:
         return sock
 
     async def stop(self) -> None:
-        """Shut down the server and close the client connection (graceful)."""
-        if self._server is not None:
-            self._server.close()
-            await self._server.wait_closed()
-            self._server = None
-        for w in list(self._writers):
-            try:
-                w.close()
-                await w.wait_closed()
-            except Exception:  # noqa: BLE001
-                pass
+        """Shut down the server and close every client connection (bounded).
+
+        ``Server.wait_closed()`` has been observed to never wake once all
+        handlers have exited (CPython 3.12), which hung the selftest and
+        graceful daemon shutdown. Bound both waits: the socket is already
+        closed synchronously by ``close()``, so a timeout only means we stop
+        waiting for the event-loop bookkeeping.
+        """
+        server = self._server
+        self._server = None
+        writers = list(self._writers)
         self._writers.clear()
         self._clients.clear()
+        for w in writers:
+            try:
+                w.close()
+            except Exception:  # noqa: BLE001
+                pass
+        if server is not None:
+            server.close()
+            try:
+                await asyncio.wait_for(server.wait_closed(), timeout=2.0)
+            except Exception:  # noqa: BLE001 - TimeoutError/CancelledError variants
+                pass
+        for w in writers:
+            try:
+                await asyncio.wait_for(w.wait_closed(), timeout=1.0)
+            except Exception:  # noqa: BLE001
+                pass
         log.info("ipc: server stopped")
 
     # ------------------------------------------------------------------ #
