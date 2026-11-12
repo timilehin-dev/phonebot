@@ -162,5 +162,13 @@ class BotdSshClient(
 
     companion object {
         private val JSON = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+        /** An empty auth — only valid for tests / placeholder wiring that will be replaced
+         *  by a real keypair or password once the wizard has configured Termux SSH.
+         *
+         *  This exists so the compile-time type `SshAuth` has a stable placeholder value;
+         *  no shipping code should treat `EMPTY_AUTH` as a real credential path.
+         */
+        val EMPTY_AUTH: SshAuth = SshAuth.Password("")
     }
 }

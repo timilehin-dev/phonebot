@@ -8,7 +8,7 @@ import android.content.Intent
  * Termux.
  *
  * Transport (corrected, per docs/ADR-001):
- *  - **Primary:** [BotdSshClient] — SSH into Termux's local sshd
+ *  - **[BotdSshClient]** — SSH into Termux's local sshd
  *    (`termux-setup-ssh`, 127.0.0.1:8022) and run the in-Termux socket
  *    client `python -m botd.cli <type> <args>`, which opens the
  *    *abstract-namespace* socket `@phonebot`. This is the device-reliable,
@@ -93,7 +93,6 @@ class TermuxBridge(private val context: Context) {
         client?.cli("deny", cliFrame("corr_id" to corrId))
 
     fun pauseBot(bot: String): IpcReply? = client?.cli("pause_bot", cliFrame("bot" to bot))
-
     fun resumeBot(bot: String): IpcReply? = client?.cli("resume_bot", cliFrame("bot" to bot))
 
     /** Snapshot of every bot flag. null when degraded. */
@@ -116,6 +115,37 @@ class TermuxBridge(private val context: Context) {
         buildLlmFrame(model, messagesJson, toolsJson, stream),
         timeoutMs = 300_000,
     )
+
+    /**
+     * Start the persistent subscriber stream. Call once the SSH session is healthy.
+     *
+     * This initiates the long-lived `python -m botd.cli subscribe` exec channel and
+     * keeps it alive with reconnect (the caller's lifecycle owns the start/stop).
+     *
+     * The caller supplies [onLine] (new raw JSON from botd) and [onError] (transport
+     * hiccup). The bridge does not keep UI state — the app-side [BridgeEventStore]
+     * owns the approvals inbox and one-shot approve/deny RPCs.
+     */
+    fun startEvents(
+        host: String = "127.0.0.1",
+        port: Int = 8022,
+        user: String = "termux",
+        auth: BotdSshClient.SshAuth = BotdSshClient.EMPTY_AUTH,
+        botdHome: String = "~/phonebot",
+        onLine: (String) -> Unit,
+        onError: (String) -> Unit,
+    ) {
+        BridgeEventStream(
+            host = host,
+            port = port,
+            user = user,
+            botdHome = botdHome,
+            auth = auth,
+            onLine = onLine,
+            onError = onError,
+            tag = "TermuxBridge.startEvents",
+        ).connect()
+    }
 
     private fun buildLlmFrame(
         model: String,

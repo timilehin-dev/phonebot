@@ -3,6 +3,9 @@ package com.phonebot.app
 import android.app.Application
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.phonebot.app.bridge.ApprovalNotificationCoordinator
+import com.phonebot.app.bridge.BridgeRuntime
+import com.phonebot.app.bridge.SystemApprovalNotifier
 import com.phonebot.credentials.SecretVault
 
 /**
@@ -33,6 +36,13 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         secretVault = SecretVault(this)
+        // needs-approval -> one high-priority notification (deduped, cancelled on resolve).
+        BridgeRuntime.setApprovalObserver(
+            ApprovalNotificationCoordinator(SystemApprovalNotifier(this))
+        )
+        // Start the persistent bridge subscriber (best-effort). It reconnects until
+        // botd/sshd becomes reachable with configured credentials.
+        BridgeRuntime.start()
         // TODO(Phase 2): start BotdNudgeService only when botd is actually deployed
         // (checked via TermuxBridge socket ping); boot receiver handles the post-boot path.
         // TODO(Phase 2): seed DataStore with bot roster + allowlists from botd registry.json.

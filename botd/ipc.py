@@ -145,9 +145,13 @@ class IpcServer:
         self.state_store = state_store   # an object with .states: Dict[str,BotState]
         self.bus = bus
         self.scheduler = scheduler
+        if self.bus is not None:
+            self.bus.event_sink = self._enqueue_bus_event
         self._server: Optional[asyncio.AbstractServer] = None
-        self._writer: Optional[asyncio.StreamWriter] = None
-        self._client_addr: Optional[Any] = None
+        # Multi-connection model (Phase 2): a persistent subscriber channel and
+        # one-shot command channels can coexist. Bus events are broadcast to
+        # every connected writer.
+        self._writers: set[asyncio.StreamWriter] = set()
         self._clients = asyncio.Event()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._pending_approvals: Dict[str, asyncio.Future] = {}
@@ -284,12 +288,13 @@ class IpcServer:
             self._server.close()
             await self._server.wait_closed()
             self._server = None
-        if self._writer is not None:
+        for w in list(self._writers):
             try:
-                self._writer.close()
-                await self._writer.wait_closed()
-            finally:
-                self._writer = None
+                w.close()
+                await w.wait_closed()
+            except Exception:  # noqa: BLE001
+                pass
+        self._writers.clear()
         self._clients.clear()
         log.info("ipc: server stopped")
 
@@ -300,16 +305,9 @@ class IpcServer:
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         """Handle one app connection: read JSON lines, dispatch, write responses."""
-        # Single-connection model: a new connection supersedes the old one.
-        if self._writer is not None:
-            try:
-                self._writer.close()
-            except Exception:  # noqa: BLE001
-                pass
-        self._writer = writer
-        self._client_addr = writer.get_extra_info("peername")
+        self._writers.add(writer)
         self._clients.set()
-        log.info("ipc: client connected (addr=%s)", self._client_addr)
+        log.info("ipc: client connected (writers=%d)", len(self._writers))
         try:
             while True:
                 line = await reader.readline()
@@ -322,9 +320,9 @@ class IpcServer:
         except (asyncio.IncompleteReadError, ConnectionResetError):
             pass
         finally:
-            log.info("ipc: client disconnected; falling back to direct LLM")
-            if self._writer is writer:
-                self._writer = None
+            log.info("ipc: client disconnected")
+            self._writers.discard(writer)
+            if not self._writers:
                 self._clients.clear()
 
     @staticmethod
@@ -425,6 +423,10 @@ class IpcServer:
                         "paused": bool(flags.get("paused", False)),
                         "spend_usd": float(flags.get("spend_usd", 0.0)),
                         "pending_wakeup": bs.wakeup_count(),
+                        # Display-only hints for the app roster (Phase 2); absent
+                        # unless a turn/tool recorded them in state.json.
+                        "current_task": str(flags.get("current_task") or flags.get("activity") or ""),
+                        "last_activity": str(flags.get("last_activity") or ""),
                     }
                 )
         return {"type": "state", "corr_id": msg.get("corr_id"), "bots": bots}
@@ -487,6 +489,7 @@ class IpcServer:
         "list_jobs": "_h_list_jobs",
         "llm_request": "_h_llm_request",
         "update_payload": "_h_update_payload",
+        "subscribe": "_h_subscribe",
     }
 
     # ------------------------------------------------------------------ #
@@ -549,18 +552,47 @@ class IpcServer:
             self._pending_approvals.pop(corr_id, None)
             return False
 
+    async def _h_subscribe(self, msg: Dict[str, Any]) -> Dict[str, Any]:
+        """Mark this connection as a live subscriber (bus events are pushed to all writers)."""
+        return {"type": "ack", "corr_id": msg.get("corr_id"), "subscribed": True}
+
+    def _enqueue_bus_event(self, event: Dict[str, Any]) -> None:
+        """Schedule a bus_event push to all connected writers (thread/loop safe)."""
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            return
+        coro = self._push_bus_event(dict(event))
+        try:
+            if loop.is_running():
+                loop.create_task(coro)
+            else:
+                loop.run_until_complete(coro)
+        except RuntimeError:
+            pass
+
+    async def _push_bus_event(self, event: Dict[str, Any]) -> None:
+        for w in list(self._writers):
+            if w.is_closing():
+                continue
+            try:
+                await self._send(w, {"type": "bus_event", "event": event})
+            except Exception:  # noqa: BLE001
+                log.debug("ipc: failed to push bus_event to a writer")
+
     # ------------------------------------------------------------------ #
     # Client-connection helper
     # ------------------------------------------------------------------ #
     @property
     def client_connected(self) -> bool:
-        """True when an app client is currently attached."""
-        return self._writer is not None and not self._writer.is_closing()
+        """True when at least one app client is currently attached."""
+        return any(not w.is_closing() for w in self._writers)
 
     async def flush(self) -> None:
         """Push any buffered state out (called on SIGTERM/SIGINT)."""
-        if self._writer is not None:
+        for w in list(self._writers):
+            if w.is_closing():
+                continue
             await self._send(
-                self._writer,
+                w,
                 {"type": "bus_event", "kind": "shutdown", "message": "botd shutting down"},
             )

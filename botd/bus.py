@@ -107,6 +107,9 @@ class MessageBus:
         self.states = states
         self.chief_bot = chief_bot
         self.urgent_waker = urgent_waker
+        #: Optional sink for live clients (e.g. IpcServer): called with the
+        #: accepted message dict so it can be pushed over a persistent channel.
+        self.event_sink: Optional[Callable[[Dict[str, Any]], None]] = None
         self._lock = threading.Lock()
         # (from_bot, to_bot) -> deque of (monotonic, priority)
         self._rate: Dict[tuple, deque] = {}
@@ -171,6 +174,13 @@ class MessageBus:
             line = msg.to_json_line()
 
         self._append_shared_journal(line)
+
+        # Notify any live subscriber (app's persistent bridge) of the event.
+        if self.event_sink is not None:
+            try:
+                self.event_sink(asdict(msg))
+            except Exception:  # noqa: BLE001 - never break publishing
+                log.exception("bus: event_sink raised")
 
         targets: List[str] = []
         if msg.to_bot == "*":
