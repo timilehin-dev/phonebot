@@ -41,17 +41,17 @@ class App : Application() {
             ApprovalNotificationCoordinator(SystemApprovalNotifier(this))
         )
         // Start the persistent bridge subscriber (best-effort). It reconnects until
-        // botd/sshd becomes reachable with configured credentials.
-        BridgeRuntime.start()
-        // TODO(Phase 2): start BotdNudgeService only when botd is actually deployed
-        // (checked via TermuxBridge socket ping); boot receiver handles the post-boot path.
-        // TODO(Phase 2): seed DataStore with bot roster + allowlists from botd registry.json.
+        // botd/sshd becomes reachable with the SSH credential stored in the vault.
+        BridgeRuntime.startFromVault(secretVault)
+        // The post-boot reconnect is owned by BootCompletedReceiver →
+        // BotdNudgeService, which reconnects the subscriber and pings botd.
+        // The roster is read live from botd's `get_state`, so there is no
+        // app-side copy to seed: DataStore keeps wizard/UI preferences only.
     }
 
-    /** Kick off the foreground service that nudges botd (used by boot receiver + manual). */
+    /** Kick off the foreground service that reconnects + pings botd (boot receiver / manual). */
     fun startBotdNudgeService() {
-        // BotdNudgeService is declared in AndroidManifest.xml; Phase 1 is a stub that
-        // just posts a notification so the wiring is testable without a live Termux socket.
+        // Bounded: BotdNudgeService stops itself once botd answers or retries run out.
         startForegroundService(
             android.content.Intent(this, com.phonebot.app.service.BotdNudgeService::class.java)
         )

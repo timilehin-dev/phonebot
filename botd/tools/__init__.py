@@ -623,7 +623,7 @@ class ToolRegistry:
         limit = int(args.get("limit", 20))
         resolver = self._state_resolver()
         if resolver is None:
-            return {"ok": False, "stub": True, "error": "state resolver not wired; Phase 2"}
+            return {"ok": False, "stub": True, "error": "state resolver not wired (the daemon wires it)"}
         events = resolver(bot).list_wakeup(limit=limit)
         return {"ok": True, "bot": bot, "events": events}
 

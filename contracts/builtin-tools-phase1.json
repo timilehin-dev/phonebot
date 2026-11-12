@@ -319,7 +319,7 @@
     "kind": "builtin",
     "provider": "botd",
     "name": "list_inbox",
-    "description": "List the invoking bot's pending wakeup queue entries (cron_result and bus events). Phase 1: stub — returns queue depth and oldest entry age; full entry listing lands with Phase 2 bus delivery.",
+    "description": "List the invoking bot's pending wakeup queue entries (cron_result and bus events) without consuming them. Served by the daemon's live state resolver.",
     "input_schema": {
       "type": "object",
       "properties": {

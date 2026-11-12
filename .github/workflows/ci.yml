@@ -55,6 +55,12 @@ jobs:
       - name: Phase 2 chain + boot catch-up
         run: python test/test_phase2_chain.py
 
+      - name: Persistent subscriber channel (Phase 2 bridge)
+        run: python test/test_subscribe_stream.py
+
+      - name: Phase 2 coverage + delivery-policy record
+        run: python test/test_phase2_coverage.py
+
   android-build:
     # Compiles the APK so Kotlin/Compose/AGP breakage fails the build, not
     # just the tag-time release workflow.

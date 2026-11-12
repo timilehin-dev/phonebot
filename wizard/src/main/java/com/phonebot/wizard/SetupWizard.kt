@@ -16,7 +16,7 @@ import com.phonebot.termux.TermuxBridge
  * SetupWizardScreen can render the node graph (done / active / failed /
  * pending) and offer "tap to retry" on failed nodes.
  *
- * The UI (SetupWizardScreen) binds to this via a StateFlow in Phase 2;
+ * The UI (SetupWizardScreen) binds to this via a StateFlow in a later phase;
  * Phase 1 keeps the state machine testable without Android deps.
  */
 sealed class Step {
@@ -31,7 +31,7 @@ sealed class Step {
         override val label = "Install Termux"
         override fun check(c: Context, b: TermuxBridge, i: PackageInstallerFlow) = b.isTermuxInstalled()
         override suspend fun execute(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
-            StepResult.Running // Phase 2: i.downloadAndVerify(TERMUX) + installSession
+            StepResult.Running // Later phase: i.downloadAndVerify(TERMUX) + installSession
         override fun repair(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
             if (check(c, b, i)) StepResult.Done else StepResult.Running
     }
@@ -42,7 +42,7 @@ sealed class Step {
         override fun check(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
             try { c.packageManager.getPackageInfo("com.termux.api", 0) != null } catch (e: Exception) { false }
         override suspend fun execute(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
-            StepResult.Running // Phase 2: downloadAndVerify(TERMUX_API) + install
+            StepResult.Running // Later phase: downloadAndVerify(TERMUX_API) + install
         override fun repair(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
             if (check(c, b, i)) StepResult.Done else StepResult.Running
     }
@@ -52,7 +52,7 @@ sealed class Step {
         override val label = "Deploy botd"
         override fun check(c: Context, b: TermuxBridge, i: PackageInstallerFlow) = b.isBotdUp()
         override suspend fun execute(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
-            StepResult.Running // Phase 2: deploy botd payload via SSH + start daemon
+            StepResult.Running // Later phase: deploy botd payload via SSH + start daemon
         override fun repair(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
             if (check(c, b, i)) StepResult.Done else StepResult.Running
     }
@@ -63,7 +63,7 @@ sealed class Step {
         override fun check(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
             try { c.packageManager.getPackageInfo("com.termux.boot", 0) != null } catch (e: Exception) { false }
         override suspend fun execute(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
-            StepResult.Running // Phase 2: install Termux:Boot + enable wake-on-boot profile
+            StepResult.Running // Later phase: install Termux:Boot + enable wake-on-boot profile
         override fun repair(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
             if (check(c, b, i)) StepResult.Done else StepResult.Running
     }
@@ -71,9 +71,9 @@ sealed class Step {
     object EnableWakeLock : Step() {
         override val id = "enable_wakelock"
         override val label = "Enable wake-lock"
-        override fun check(c: Context, b: TermuxBridge, i: PackageInstallerFlow) = false // TODO: probe via botd
+        override fun check(c: Context, b: TermuxBridge, i: PackageInstallerFlow) = false // TODO(later phase): create the first bot(later phase): probe via botd
         override suspend fun execute(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
-            StepResult.Running // Phase 2: termux-wake-lock + battery-optimization exemption
+            StepResult.Running // Later phase: termux-wake-lock + battery-optimization exemption
         override fun repair(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
             if (check(c, b, i)) StepResult.Done else StepResult.Running
     }
@@ -82,11 +82,11 @@ sealed class Step {
         override val id = "connect_llm"
         override val label = "Connect LLM"
         override fun check(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
-            // Phase 2: a stored API key exists in SecretVault and a ping
+            // Later phase: a stored API key exists in SecretVault and a ping
             //  to the LLM endpoint returns 200/401 (auth ok).
             false
         override suspend fun execute(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
-            StepResult.Running // Phase 2: store key in SecretVault + verify with LlmClient
+            StepResult.Running // Later phase: store key in SecretVault + verify with LlmClient
         override fun repair(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
             if (check(c, b, i)) StepResult.Done else StepResult.Running
     }
@@ -94,9 +94,9 @@ sealed class Step {
     object OnboardBot : Step() {
         override val id = "onboard_bot"
         override val label = "Onboard bot"
-        override fun check(c: Context, b: TermuxBridge, i: PackageInstallerFlow) = false // TODO
+        override fun check(c: Context, b: TermuxBridge, i: PackageInstallerFlow) = false // TODO(later phase): create the first bot
         override suspend fun execute(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
-            StepResult.Running // Phase 2: create the first bot profile + allowlist
+            StepResult.Running // Later phase: create the first bot profile + allowlist
         override fun repair(c: Context, b: TermuxBridge, i: PackageInstallerFlow) =
             StepResult.Running
     }
@@ -111,7 +111,7 @@ sealed interface StepResult {
 
 /**
  * Wizard state — what the UI needs to render the node graph.
- * Phase 1 is a plain data class; Phase 2 wraps it in a StateFlow owned
+ * Phase 1 is a plain data class; A later phase wraps it in a StateFlow owned
  * by a ViewModel so the SetupWizardScreen can observe it.
  */
 data class WizardState(

@@ -118,24 +118,20 @@ class AlarmScheduler(private val context: Context) {
     }
 
     /**
-     * Receiver target: fires on the exact alarm. Phase 1 opens the app so
-     * the foreground nudge service can poke botd; Phase 2 keeps it as a
-     * lightweight service wake.
+     * Receiver target: fires on the exact alarm and wakes the nudge service
+     * (which reconnects the bridge and pokes botd), without opening the UI.
      */
     class OnAlarmFiredReceiver : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val tag = intent.getStringExtra("tag") ?: return
             Log.d("AlarmScheduler", "alarm fired: tag=$tag")
-            // Open the app → foreground service → nudge botd tick via TermuxBridge.
-            // Resolve the launch intent by package: :scheduling must not depend
-            // on :app (that would be a circular module dependency).
-            val appIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-                ?: return
-            appIntent.putExtra("phonebot_routine_tag", tag)
-            appIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(appIntent)
-            // TODO(Phase 2): replace app-open with a foreground service start
-            // so the user's UI is not disturbed.
+            // Start the app's foreground service by class name: :scheduling
+            // must not depend on :app (that would be a circular dependency).
+            val service = Intent().apply {
+                setClassName(context.packageName, "com.phonebot.app.service.BotdNudgeService")
+                putExtra("reason", "alarm:$tag")
+            }
+            context.startForegroundService(service)
         }
     }
 

@@ -181,7 +181,7 @@ class PackageInstallerFlow(private val context: Context) {
 class PackageInstallReceiver : android.content.BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val pkg = intent.getStringExtra("package") ?: return
-        // Phase 2: forward to the wizard's Step completion check.
+        // Later phase: forward to the wizard's Step completion check.
         android.util.Log.d("PackageInstallerFlow", "package installed: $pkg")
     }
 }

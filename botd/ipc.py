@@ -149,9 +149,11 @@ class IpcServer:
             self.bus.event_sink = self._enqueue_bus_event
         self._server: Optional[asyncio.AbstractServer] = None
         # Multi-connection model (Phase 2): a persistent subscriber channel and
-        # one-shot command channels can coexist. Bus events are broadcast to
-        # every connected writer.
+        # one-shot command channels coexist. Only connections that sent
+        # `subscribe` receive bus_event pushes, so a short-lived CLI call never
+        # swallows frames meant for the app's background reader.
         self._writers: set[asyncio.StreamWriter] = set()
+        self._subscribers: set[asyncio.StreamWriter] = set()
         self._clients = asyncio.Event()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._pending_approvals: Dict[str, asyncio.Future] = {}
@@ -295,6 +297,7 @@ class IpcServer:
         self._server = None
         writers = list(self._writers)
         self._writers.clear()
+        self._subscribers.clear()
         self._clients.clear()
         for w in writers:
             try:
@@ -338,6 +341,7 @@ class IpcServer:
         finally:
             log.info("ipc: client disconnected")
             self._writers.discard(writer)
+            self._subscribers.discard(writer)
             if not self._writers:
                 self._clients.clear()
 
@@ -375,6 +379,11 @@ class IpcServer:
             reply = {"type": "error", "corr_id": msg.get("corr_id"), "message": str(exc)}
         if reply is not None:
             await self._send(writer, reply)
+        # `subscribe` upgrades *this* connection into a bus subscriber. The
+        # ack must be written before the next frame, so register afterwards.
+        if mtype == "subscribe" and isinstance(reply, dict) and reply.get("subscribed"):
+            self._subscribers.add(writer)
+            log.info("ipc: subscriber attached (subscribers=%d)", len(self._subscribers))
 
     @staticmethod
     async def _send(writer: asyncio.StreamWriter, obj: Dict[str, Any]) -> None:
@@ -569,7 +578,11 @@ class IpcServer:
             return False
 
     async def _h_subscribe(self, msg: Dict[str, Any]) -> Dict[str, Any]:
-        """Mark this connection as a live subscriber (bus events are pushed to all writers)."""
+        """Ack a client that wants bus pushes on this connection.
+
+        Registration happens in :meth:`_dispatch` (it owns the writer), after
+        the ack is written, so the client always sees the ack first.
+        """
         return {"type": "ack", "corr_id": msg.get("corr_id"), "subscribed": True}
 
     def _enqueue_bus_event(self, event: Dict[str, Any]) -> None:
@@ -587,7 +600,7 @@ class IpcServer:
             pass
 
     async def _push_bus_event(self, event: Dict[str, Any]) -> None:
-        for w in list(self._writers):
+        for w in list(self._subscribers):
             if w.is_closing():
                 continue
             try:

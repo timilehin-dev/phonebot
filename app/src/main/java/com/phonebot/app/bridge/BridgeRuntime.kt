@@ -1,5 +1,6 @@
 package com.phonebot.app.bridge
 
+import com.phonebot.credentials.SecretVault
 import com.phonebot.termux.ApprovalRequest
 import com.phonebot.termux.BotdSshClient
 import com.phonebot.termux.BridgeEventStore
@@ -25,6 +26,11 @@ data class ActionFeedback(val message: String, val isError: Boolean)
  * [actionFeedback]) for the Compose UI. Screens never see SSH or JSON.
  */
 object BridgeRuntime {
+    /** Vault scope + names the setup path uses for the Termux SSH credential. */
+    const val VAULT_SCOPE = "botd"
+    const val SSH_KEY_SECRET = "ssh_private_key"
+    const val SSH_PASSWORD_SECRET = "ssh_password"
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val streamRef = AtomicReference<BridgeEventStream?>(null)
@@ -56,6 +62,47 @@ object BridgeRuntime {
     /** Wire approval notifications (called once from Application). */
     fun setApprovalObserver(observer: ApprovalObserver?) {
         approvalObserver = observer
+    }
+
+    /**
+     * Start the bridge using SSH credentials from the Keystore vault.
+     *
+     * Names are stable because the setup path (wizard, later phase) writes
+     * them: `ssh_private_key` (PEM, preferred) or `ssh_password`, both in the
+     * `botd` scope. Without a stored credential the bridge still starts with no
+     * auth and simply reports "botd offline", so a fresh install never crashes.
+     */
+    fun startFromVault(
+        vault: SecretVault,
+        host: String = "127.0.0.1",
+        port: Int = 8022,
+        user: String = "termux",
+        botdHome: String = "~/phonebot",
+    ) {
+        start(
+            host = host,
+            port = port,
+            user = user,
+            auth = sshAuthFromVault(vault),
+            botdHome = botdHome,
+        )
+    }
+
+    private fun sshAuthFromVault(vault: SecretVault): BotdSshClient.SshAuth {
+        val key = runCatching { vault.retrieve(SSH_KEY_SECRET, VAULT_SCOPE).value() }.getOrNull()
+        if (!key.isNullOrBlank()) return BotdSshClient.SshAuth.Key(key)
+        val password = runCatching { vault.retrieve(SSH_PASSWORD_SECRET, VAULT_SCOPE).value() }.getOrNull()
+        if (!password.isNullOrBlank()) return BotdSshClient.SshAuth.Password(password)
+        return BotdSshClient.EMPTY_AUTH
+    }
+
+    /**
+     * Cheap liveness probe over the control plane (`botd.cli ping`). False when
+     * the bridge is not started or Termux/sshd/botd is unreachable.
+     */
+    fun pingBotd(): Boolean {
+        val client = clientRef.get() ?: return false
+        return runCatching { client.cli("ping", "{}", 15_000)?.ok == true }.getOrDefault(false)
     }
 
     @Synchronized

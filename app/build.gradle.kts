@@ -64,7 +64,7 @@ android {
         getByName("main") {
             // Design tokens live in the repo-level design-tokens/ folder (single
             // sealed object, shared by every module). Promote to a proper
-            // :design-tokens module when the second consumer lands in Phase 2.
+            // :design-tokens module when a second consumer lands.
             java.srcDir(project.file("../design-tokens"))
         }
     }

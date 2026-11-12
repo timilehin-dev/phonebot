@@ -22,8 +22,8 @@ import kotlinx.serialization.json.put
  *  3. Generate the OpenAI tools[] array (function-calling schema) for the
  *     LLM prompt, keyed by bot.
  *
- * Phase 1: the registry source is a stub (empty / placeholder); Phase 2
- * wires the fetch to TermuxBridge.sendRequest("registry.get").
+ * The fetch over the bridge is not wired yet (later phase); parsing and
+ * allowlist filtering are implemented and unit-tested directly.
  */
 class ToolRegistry(
     /** Per-bot allowlists: botId → tool ids. A bot with no entry gets

@@ -53,7 +53,7 @@ import com.phonebot.design.DesignTokens
 fun SetupWizardScreen(onBack: () -> Unit = {}) {
     val t = DesignTokens
 
-    // Phase 1: hardcoded step states; replaced by wizard.WizardState in Phase 2.
+    // Phase 1: hardcoded step states; replaced by wizard.WizardState in a later phase.
     val steps = remember {
         listOf(
             WizardStep("Install Termux", "F-Droid · com.termux", WizardStepState.Done, DesignTokens.BotHues.H0),
@@ -82,7 +82,7 @@ fun SetupWizardScreen(onBack: () -> Unit = {}) {
         ) {
             steps.forEachIndexed { i, step ->
                 WizardNode(step = step, isLast = i == steps.lastIndex) {
-                    // TODO: tap re-runs the failed step via wizard.SetupWizard (Phase 2)
+                    // TODO(later phase): tap re-runs the failed step via wizard.SetupWizard
                 }
             }
         }

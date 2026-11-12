@@ -45,7 +45,7 @@ import com.phonebot.design.DesignTokens
  *                    python (chaquopy / termux), device (accessibility / assist)
  *
  * Phase 1: placeholder data + static toggles; the tool registry sync from
- * botd and the MCP health probes arrive in Phase 2.
+ * botd and the MCP health probes arrive in a later phase.
  */
 @Composable
 fun CapabilitiesScreen(onBack: () -> Unit = {}) {
@@ -101,7 +101,7 @@ private val placeholderTools = listOf(
     ToolRow("shell.exec", "Shell command execution (termux-shell)", true),
     ToolRow("file.rw", "File read/write on device storage", true),
     ToolRow("db.sql", "SQLite queries via termux-sqlite", false),
-    ToolRow("mcp.fetch", "MCP tool-call proxy (Phase 2)", false),
+    ToolRow("mcp.fetch", "MCP tool-call proxy (later phase)", false),
 )
 
 @Composable
@@ -138,7 +138,7 @@ private fun ToolsSection() {
                     )
                 }
             }
-            // TODO: per-bot allowlist editor (Phase 2)
+            // TODO(later phase): per-bot allowlist editor
         }
     }
 }
@@ -179,7 +179,7 @@ private fun SkillsSection() {
                         }
                 }
             }
-            // TODO: skill library browser (Phase 2)
+            // TODO(later phase): skill library browser
         }
     }
 }
@@ -228,7 +228,7 @@ private fun McpSection() {
                     }
                 }
             }
-            // TODO: MCP health probe polling (Phase 2)
+            // TODO(later phase): MCP health probe polling
         }
     }
 }
@@ -256,7 +256,7 @@ private fun BackendsSection() {
             ))
             Spacer(Modifier.height(8.dp))
             BackendGroup("Device", listOf(
-                BackendRow("accessibility", false, "Accessibility service (Phase 2)"),
+                BackendRow("accessibility", false, "Accessibility service (later phase)"),
                 BackendRow("assist", false, "Assist structure"),
             ))
         }

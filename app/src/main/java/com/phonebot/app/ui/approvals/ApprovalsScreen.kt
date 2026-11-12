@@ -1,8 +1,10 @@
 package com.phonebot.app.ui.approvals
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,16 +25,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.phonebot.app.bridge.ApprovalSwipe
+import com.phonebot.app.bridge.ApprovalSwipePolicy
 import com.phonebot.design.DesignTokens
 import com.phonebot.termux.ApprovalRequest
 import com.phonebot.termux.ApprovalRisk
+import kotlin.math.roundToInt
 
 /**
  * ApprovalsScreen — risk-tiered list of pending human decisions.
@@ -104,7 +116,7 @@ fun ApprovalsScreen(
                         onApprove = { onApprove(req.corrId) },
                         onDeny = { onDeny(req.corrId) },
                     )
-                    ApprovalRisk.Confirm -> ConfirmApprovalRow(
+                    ApprovalRisk.Confirm -> SwipeableConfirmRow(
                         req = req,
                         onApprove = { onApprove(req.corrId) },
                         onDeny = { onDeny(req.corrId) },
@@ -206,6 +218,71 @@ private fun ApprovalButton(
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+/**
+ * Confirm-tier row with swipe-to-resolve (Phase 2: notify → swipe → resolve).
+ *
+ * Only this tier is swipeable: [ApprovalSwipePolicy] refuses to resolve
+ * `critical` requests, so a destructive action always needs the explicit
+ * buttons. The gesture feeds the same `onApprove`/`onDeny` callbacks as the
+ * buttons, so resolution goes through one path.
+ */
+@Composable
+private fun SwipeableConfirmRow(
+    req: ApprovalRequest,
+    onApprove: () -> Unit,
+    onDeny: () -> Unit,
+) {
+    val policy = remember { ApprovalSwipePolicy() }
+    var offsetPx by remember(req.corrId) { mutableStateOf(0f) }
+    val animatedOffset by animateFloatAsState(targetValue = offsetPx, label = "approval-swipe")
+
+    Box(Modifier.fillMaxWidth()) {
+        // Reveal layer: shows the decision the current drag would make.
+        Row(
+            Modifier.matchParentSize().padding(horizontal = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (animatedOffset > 0f) "APPROVE ▶" else "",
+                style = MaterialTheme.typography.labelSmall,
+                color = DesignTokens.Status.Ok,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                if (animatedOffset < 0f) "◀ DENY" else "",
+                style = MaterialTheme.typography.labelSmall,
+                color = DesignTokens.Status.Critical,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+
+        Box(
+            Modifier
+                .offset { IntOffset(animatedOffset.roundToInt(), 0) }
+                .pointerInput(req.corrId) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            val fraction = offsetPx / size.width.coerceAtLeast(1).toFloat()
+                            when (policy.decide(fraction, req.risk)) {
+                                ApprovalSwipe.Approve -> onApprove()
+                                ApprovalSwipe.Deny -> onDeny()
+                                ApprovalSwipe.None -> Unit
+                            }
+                            offsetPx = 0f
+                        },
+                        onHorizontalDrag = { _, dragAmount ->
+                            offsetPx = (offsetPx + dragAmount)
+                                .coerceIn(-size.width.toFloat(), size.width.toFloat())
+                        },
+                    )
+                },
+        ) {
+            ConfirmApprovalRow(req = req, onApprove = onApprove, onDeny = onDeny)
+        }
     }
 }
 

@@ -59,9 +59,9 @@
         </activity>
 
         <!--
-          Foreground service: survives process death so the botd nudge path keeps
-          working through the app's lifecycle. Started on boot + on demand.
-          TODO(Phase 2): type="shortService" for interactive nudge (termux-api shell poke).
+          Foreground service: reconnects the persistent bridge and pings botd
+          (bounded retries) after boot or on demand. dataSync is the closest
+          declared type on API 29+; the service stops itself once healthy.
         -->
         <service
             android:name=".service.BotdNudgeService"
@@ -82,7 +82,9 @@
           Accessibility service (device backend: assist/accessibility).
           The service itself is declared; enablement goes through the Settings intent
           (ACTION_ACCESSIBILITY_SETTINGS) — never auto-granted by the manifest.
-          TODO(Phase 2): wire .service.PhonebotAccessibilityService + accessibility_config.xml.
+          Beyond Phase 2: the in-app enablement flow is not built yet; the service
+          is declared + config'd (res/xml/accessibility_config.xml) but inert until
+          the user enables it in Android Settings.
         -->
         <service
             android:name=".service.PhonebotAccessibilityService"

@@ -42,7 +42,7 @@ import com.phonebot.design.DesignTokens
  *   - "enable tool atlas web" → tool registry toggle for atlas
  *
  * Phase 1: placeholder action list + filter; live routing through the
- * botd RPC layer arrives in Phase 2.
+ * botd RPC layer arrives in a later phase.
  */
 @Composable
 fun CommandPaletteOverlay(onDismiss: () -> Unit) {
@@ -112,7 +112,7 @@ fun CommandPaletteOverlay(onDismiss: () -> Unit) {
                         } else {
                             filtered.forEach { action ->
                                 PaletteActionRow(action, onClick = {
-                                    // TODO: route to bot / surface (Phase 2)
+                                    // TODO(later phase): route to bot / surface
                                     onDismiss()
                                 })
                             }
