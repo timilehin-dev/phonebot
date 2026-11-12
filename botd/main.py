@@ -331,6 +331,31 @@ class BotScheduler:
 # Daemon
 # ---------------------------------------------------------------------------
 
+def ensure_chief_bot(config: Config, store: BotStore) -> Optional[BotState]:
+    """Chief-of-staff onboarding (Phase 2).
+
+    Ensures the configured chief bot exists, carries the chief role, and has
+    the onboarding soul that tells it to observe every bus event and aggregate
+    outcomes for the human. Idempotent: an existing custom soul is preserved
+    unless it is still the stock template.
+    """
+    chief_name = config.chief_bot
+    if not chief_name:
+        return None
+    chief_state = store.get_or_create(chief_name)
+    soul_path = chief_state.bot_dir / "soul.md"
+    if not soul_path.exists() or "a persistent agent running on a phone" in soul_path.read_text(encoding="utf-8"):
+        soul_path.write_text(
+            "# Soul\n"
+            "You are the chief-of-staff. You observe every bus event between\n"
+            "other bots, aggregate outcomes, and surface decisions the human\n"
+            "must make. You never execute risky work yourself; you delegate.\n",
+            encoding="utf-8",
+        )
+    chief_state.with_state(lambda s: {**s, "role": "chief"})
+    return chief_state
+
+
 async def run_daemon(config: Config) -> int:
     """Assemble the object graph and run the daemon until a stop signal.
 
@@ -340,20 +365,8 @@ async def run_daemon(config: Config) -> int:
     dependency order.
     """
     store = BotStore(config)
-    # Chief-of-staff onboarding (Phase 2): ensure the chief bot exists so it
-    # can subscribe to every bus event and aggregate outcomes for the human.
+    ensure_chief_bot(config, store)
     chief_name = config.chief_bot
-    if chief_name:
-        chief_state = store.get_or_create(chief_name)
-        soul_path = chief_state.bot_dir / "soul.md"
-        if not soul_path.exists() or "a persistent agent running on a phone" in soul_path.read_text(encoding="utf-8"):
-            soul_path.write_text(
-                "# Soul\n"
-                "You are the chief-of-staff. You observe every bus event between\n"
-                "other bots, aggregate outcomes, and surface decisions the human\n"
-                "must make. You never execute risky work yourself; you delegate.\n",
-                encoding="utf-8",
-            )
     bus = MessageBus(config.home_path, store.states, chief_bot=chief_name)
     ipc = IpcServer(config, state_store=store, bus=bus)
     # ``get_or_create`` doubles as the state resolver so tools that read

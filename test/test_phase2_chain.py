@@ -36,7 +36,8 @@ sys.path.insert(0, str(REPO))
 from botd.bus import MessageBus  # noqa: E402
 from botd.config import Config  # noqa: E402
 from botd.cron import CronScheduler  # noqa: E402
-from botd.main import BotScheduler, BotStore  # noqa: E402
+from botd.loop import ToolContext  # noqa: E402
+from botd.main import BotScheduler, BotStore, ensure_chief_bot  # noqa: E402
 from botd.state import BotState  # noqa: E402
 from botd.tools import ToolRegistry  # noqa: E402
 
@@ -305,6 +306,36 @@ async def test_cron_task_result_chain() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# 4. create_bot meta-tool + chief-of-staff onboarding
+# --------------------------------------------------------------------------- #
+
+async def test_create_bot_and_chief_onboarding() -> None:
+    home = _home("pb-bots-")
+    config = Config(home_path=home)
+    store = BotStore(config)
+    bus = MessageBus(home, store.states, chief_bot=config.chief_bot)
+    tools = ToolRegistry(config, ipc=None, bus=bus, state_resolver=store.get_or_create)
+
+    created = await tools.dispatch(
+        "create_bot",
+        {"name": "analyst", "soul": "You are the analyst.\n"},
+        ToolContext(bot_name="chief", llm=None),
+    )
+    assert created.get("ok") is True, created
+    analyst = store.states["analyst"]
+    assert (analyst.bot_dir / "soul.md").read_text(encoding="utf-8") == "You are the analyst.\n"
+    assert analyst.load_state_json().get("paused") is False
+
+    chief = ensure_chief_bot(config, store)
+    assert chief is not None and chief.bot_name == config.chief_bot
+    assert "chief-of-staff" in (chief.bot_dir / "soul.md").read_text(encoding="utf-8")
+    assert chief.load_state_json().get("role") == "chief"
+    # Idempotent: running onboarding again must not duplicate or break anything.
+    again = ensure_chief_bot(config, store)
+    assert again is not None and again.bot_name == chief.bot_name
+
+
+# --------------------------------------------------------------------------- #
 # Runner
 # --------------------------------------------------------------------------- #
 
@@ -313,6 +344,7 @@ def main() -> int:
         ("boot catch-up replay is exactly once", test_boot_replay_is_exactly_once),
         ("catch_up trigger replays missed jobs", test_catch_up_trigger_replays_missed_jobs),
         ("cron chief/scout/writer task/result chain", test_cron_task_result_chain),
+        ("create_bot + chief onboarding", test_create_bot_and_chief_onboarding),
     ]
     failures = 0
     print("phase 2 chain checks")
