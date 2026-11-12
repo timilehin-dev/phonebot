@@ -59,6 +59,7 @@ import androidx.compose.ui.zIndex
 import com.phonebot.app.bridge.ActionFeedback
 import com.phonebot.app.bridge.BotRow
 import com.phonebot.app.bridge.BotStatus
+import com.phonebot.app.bridge.BridgeObservatoryDataSource
 import com.phonebot.app.bridge.BridgeRuntime
 import com.phonebot.app.ui.approvals.ApprovalsScreen
 import com.phonebot.app.ui.observatory.ObservatoryScreen
@@ -221,7 +222,14 @@ fun PhonebotShell(approvalsRequest: Int = 0) {
                         botId = activeBotId!!,
                         onBack = { activeBotId = null },
                     )
-                    tab == ShellTab.Observatory -> ObservatoryScreen(onBotSelected = { activeBotId = it })
+                    tab == ShellTab.Observatory -> {
+                        val observatory by BridgeObservatoryDataSource.state.collectAsState()
+                        ObservatoryScreen(
+                            state = observatory,
+                            onRefresh = { BridgeObservatoryDataSource.refresh() },
+                            onBotSelected = { activeBotId = it },
+                        )
+                    }
                     tab == ShellTab.Bots -> BotRosterTab(onBotSelected = { activeBotId = it })
                     tab == ShellTab.Routines -> RoutinesScreen()
                 }

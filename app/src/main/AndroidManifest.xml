@@ -16,9 +16,15 @@
     <!-- Phase 1 exact-alarm routines (AlarmScheduler, API 31+). -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!-- Boot survival: BootCompletedReceiver starts the botd nudge service, which
+         is how the app rejoins the daemon after a reboot. Without this permission
+         the receiver is declared but never invoked. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!-- Foreground service that nudges botd through Termux:Boot after boot. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Android 13+ approval alerts (SystemApprovalNotifier) need this grant. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Accessibility service is declared, NOT requested here — enabled via intent

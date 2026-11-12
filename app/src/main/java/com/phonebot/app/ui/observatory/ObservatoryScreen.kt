@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,10 +22,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -36,31 +36,39 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.phonebot.app.bridge.BotRow
+import com.phonebot.app.bridge.BotStatus
+import com.phonebot.app.bridge.ObservatoryEvent
+import com.phonebot.app.bridge.ObservatoryEventKind
+import com.phonebot.app.bridge.ObservatoryUiState
 import com.phonebot.design.DesignTokens
+import com.phonebot.termux.ApprovalRequest
+import com.phonebot.termux.ApprovalRisk
 
 /**
  * Observatory — the home screen. Three bands:
  *
- *  1. Digest strip (top): fleet-level summary, one line per metric.
- *  2. Bot crew grid (middle): one card per bot — avatar ring in the bot's
- *     hue, name, activity line, status indicator (scanline for working,
- *     pulse for waiting), approval badge when a request is pending.
- *  3. Needs-you stack (bottom): the single most urgent human decision.
+ *  1. Digest strip: fleet-level summary from the live bridge.
+ *  2. Bot crew grid: one card per bot from botd's `get_state` roster.
+ *  3. Live activity: real `bus_event` task/result/cron/approval traffic.
+ *  4. Needs-you: the most urgent pending approval.
  *
- * Filter chip row sits between band 1 and band 2.
- *
- * Phase 1: placeholder data; live feed lands with the botd socket in Phase 2.
+ * Data arrives as [ObservatoryUiState] through [com.phonebot.app.bridge.ObservatoryDataSource],
+ * so the UI can be re-themed or backed by a different source later without
+ * touching botd/JSON.
  */
 @Composable
-fun ObservatoryScreen(onBotSelected: (botId: String) -> Unit) {
-    val t = DesignTokens
+fun ObservatoryScreen(
+    state: ObservatoryUiState,
+    onRefresh: () -> Unit = {},
+    onBotSelected: (botId: String) -> Unit,
+) {
     var filter by remember { mutableStateOf(ObservatoryFilter.All) }
+    LaunchedEffect(Unit) { onRefresh() }
 
     LazyColumn(
         modifier = Modifier
@@ -68,31 +76,22 @@ fun ObservatoryScreen(onBotSelected: (botId: String) -> Unit) {
             .padding(horizontal = DesignTokens.Density.ScreenPad.dp),
         verticalArrangement = Arrangement.spacedBy(DesignTokens.Density.CardGap.dp),
     ) {
-        // Band 1: digest strip.
-        item {
-            DigestStrip()
-        }
-
-        // Filter chip row.
-        item {
-            FilterChipRow(selected = filter, onSelect = { filter = it })
-        }
-
-        // Band 2: bot crew grid.
-        item {
-            val visible = when (filter) {
-                ObservatoryFilter.All -> placeholderCrew
-                ObservatoryFilter.Working -> placeholderCrew.filter { it.statusLabel == "working" }
-                ObservatoryFilter.Waiting -> placeholderCrew.filter { it.statusLabel == "waiting" }
-                ObservatoryFilter.Approval -> placeholderCrew.filter { it.approvalBadge != null }
+        item { DigestStrip(state, onRefresh) }
+        item { FilterChipRow(selected = filter, onSelect = { filter = it }) }
+        item { CrewSection(state, filter, onBotSelected) }
+        item { SectionHeader("Activity", "${state.events.size} recent") }
+        if (state.events.isEmpty()) {
+            item {
+                EmptyCard(
+                    title = if (state.online) "No bus activity yet" else "botd offline",
+                    body = state.error
+                        ?: "Task/result traffic between bots will appear here as it happens.",
+                )
             }
-            CrewGrid(visible, onBotSelected)
+        } else {
+            items(state.events, key = { it.id }) { event -> ActivityRow(event) }
         }
-
-        // Band 3: needs-you stack.
-        item {
-            NeedsYouStack()
-        }
+        item { NeedsYouStack(state.pending) }
         item { Spacer(modifier = Modifier.height(64.dp)) } // room for bottom nav
     }
 }
@@ -102,31 +101,39 @@ fun ObservatoryScreen(onBotSelected: (botId: String) -> Unit) {
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun DigestStrip() {
-    val t = DesignTokens
+private fun DigestStrip(state: ObservatoryUiState, onRefresh: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
         color = DesignTokens.Surfaces.Surface,
         contentColor = DesignTokens.Chrome.Text,
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Fleet", style = MaterialTheme.typography.labelSmall, color = DesignTokens.Chrome.TextFaint)
-            DigestLine("3 bots online · 1 waiting on you", DesignTokens.Status.Waiting)
-            DigestLine("14 runs last hour · 0 failed", DesignTokens.Status.Ok)
-            // TODO: digest figures come from the botd /digest RPC (Phase 2).
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Fleet", style = MaterialTheme.typography.labelSmall, color = DesignTokens.Chrome.TextFaint)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "refresh",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = DesignTokens.Chrome.TextSecondary,
+                    modifier = Modifier.clickable(onClick = onRefresh),
+                )
+            }
+            DigestLine(
+                "${state.crew.size} bots · ${state.pending.size} waiting on you",
+                if (state.pending.isEmpty()) DesignTokens.Status.Ok else DesignTokens.Status.Waiting,
+            )
+            DigestLine(
+                "${state.events.size} events · " + if (state.online) "live bridge" else "botd offline",
+                if (state.online) DesignTokens.Status.Ok else DesignTokens.Status.Critical,
+            )
         }
     }
 }
 
 @Composable
 private fun DigestLine(text: String, accent: Color) {
-    val t = DesignTokens
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(6.dp)
-                .background(accent, CircleShape),
-        )
+        Box(Modifier.size(6.dp).background(accent, CircleShape))
         Spacer(Modifier.width(8.dp))
         Text(text, style = MaterialTheme.typography.bodyMedium, color = DesignTokens.Chrome.TextSecondary)
     }
@@ -145,28 +152,24 @@ private enum class ObservatoryFilter(val label: String) {
 
 @Composable
 private fun FilterChipRow(selected: ObservatoryFilter, onSelect: (ObservatoryFilter) -> Unit) {
-    val t = DesignTokens
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ObservatoryFilter.entries.forEach { f ->
             val isSel = f == selected
             Surface(
                 shape = RoundedCornerShape(DesignTokens.Shape.ChipRadius),
                 color = if (isSel) DesignTokens.Surfaces.SurfaceHigh else DesignTokens.Surfaces.SurfaceContainer,
-                contentColor = if (isSel) DesignTokens.Chrome.Text else DesignTokens.Chrome.TextSecondary,
+                modifier = Modifier.clickable { onSelect(f) },
             ) {
                 Text(
                     text = " ${f.label} ",
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                     style = MaterialTheme.typography.labelMedium,
-                    color = contentColor(),
+                    color = if (isSel) DesignTokens.Chrome.Text else DesignTokens.Chrome.TextSecondary,
                 )
             }
         }
     }
 }
-
-@Composable
-private fun contentColor() = MaterialTheme.colorScheme.onSurface
 
 // ---------------------------------------------------------------------------
 // Band 2: crew grid + bot card
@@ -181,16 +184,63 @@ private data class CrewMember(
     val approvalBadge: String?,
 )
 
-private val placeholderCrew = listOf(
-    CrewMember("atlas", "Atlas", DesignTokens.BotHues.H0, "scraping price deltas", "working", null),
-    CrewMember("sable", "Sable", DesignTokens.BotHues.H1, "awaiting approval", "waiting", "rm -rf build/"),
-    CrewMember("vex", "Vex", DesignTokens.BotHues.H2, "digesting inbox", "working", null),
-    CrewMember("onyx", "Onyx", DesignTokens.BotHues.H3, "dormant · last run 4h", "idle", null),
-)
+private fun BotRow.toCrewMember(index: Int, pending: List<ApprovalRequest>): CrewMember {
+    val badge = pending.firstOrNull { it.bot.equals(id, ignoreCase = true) }?.command
+    val statusLabel = when (status) {
+        BotStatus.Running -> "working"
+        BotStatus.WaitingApproval -> "waiting"
+        BotStatus.Paused -> "idle"
+        BotStatus.Idle -> "idle"
+    }
+    val activity = currentTask.ifBlank {
+        when (status) {
+            BotStatus.Running -> "working"
+            BotStatus.WaitingApproval -> "awaiting approval"
+            BotStatus.Paused -> "paused"
+            BotStatus.Idle -> "idle"
+        }
+    }
+    return CrewMember(
+        id = id,
+        name = label,
+        hue = DesignTokens.BotHues.forIndex(index),
+        activity = activity,
+        statusLabel = statusLabel,
+        approvalBadge = badge,
+    )
+}
+
+@Composable
+private fun CrewSection(
+    state: ObservatoryUiState,
+    filter: ObservatoryFilter,
+    onBotSelected: (String) -> Unit,
+) {
+    val crew = state.crew.mapIndexed { index, bot -> bot.toCrewMember(index, state.pending) }
+    val visible = when (filter) {
+        ObservatoryFilter.All -> crew
+        ObservatoryFilter.Working -> crew.filter { it.statusLabel == "working" }
+        ObservatoryFilter.Waiting -> crew.filter { it.statusLabel == "waiting" }
+        ObservatoryFilter.Approval -> crew.filter { it.approvalBadge != null }
+    }
+    if (visible.isEmpty()) {
+        EmptyCard(
+            title = when {
+                !state.online -> "botd offline"
+                state.crew.isEmpty() -> "No bots yet"
+                else -> "Nothing in this filter"
+            },
+            body = state.error
+                ?: if (state.online) "Create a bot or adjust the filter."
+                else "Start botd, then refresh to load the roster.",
+        )
+    } else {
+        CrewGrid(visible, onBotSelected)
+    }
+}
 
 @Composable
 private fun CrewGrid(members: List<CrewMember>, onBotSelected: (String) -> Unit) {
-    val t = DesignTokens
     Column(verticalArrangement = Arrangement.spacedBy(DesignTokens.Density.CardGap.dp)) {
         members.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(DesignTokens.Density.CardGap.dp)) {
@@ -203,20 +253,12 @@ private fun CrewGrid(members: List<CrewMember>, onBotSelected: (String) -> Unit)
     }
 }
 
-/**
- * Instrument-panel bot card:
- *  - avatar ring in the bot's hue (outer 2dp ring, inner disc with initial)
- *  - name + activity line
- *  - status indicator: scanline sweep while working, pulse while waiting
- *  - approval badge chip when a request is pending
- */
 @Composable
 private fun BotCard(
     bot: CrewMember,
     modifier: Modifier = Modifier,
     onBotSelected: (String) -> Unit,
 ) {
-    val t = DesignTokens
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
@@ -251,6 +293,7 @@ private fun BotCard(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = DesignTokens.Status.Critical,
+                        maxLines = 1,
                     )
                 }
             }
@@ -260,7 +303,6 @@ private fun BotCard(
 
 @Composable
 private fun AvatarRing(initial: String, hue: Color) {
-    val t = DesignTokens
     Box(contentAlignment = Alignment.Center) {
         Box(
             Modifier
@@ -275,7 +317,6 @@ private fun AvatarRing(initial: String, hue: Color) {
 /** Scanline animation for working; pulse for waiting; static dot for idle. */
 @Composable
 private fun StatusIndicator(status: String) {
-    val t = DesignTokens
     when (status) {
         "working" -> ScanlineIndicator(DesignTokens.Status.Working)
         "waiting" -> PulseDot(DesignTokens.Status.Waiting)
@@ -285,7 +326,6 @@ private fun StatusIndicator(status: String) {
 
 @Composable
 private fun ScanlineIndicator(color: Color) {
-    val t = DesignTokens
     val transition = rememberInfiniteTransition(label = "scanline")
     val progress by transition.animateFloat(
         initialValue = 0f,
@@ -306,18 +346,13 @@ private fun ScanlineIndicator(color: Color) {
                 .width(10.dp)
                 .height(8.dp)
                 .background(color, RoundedCornerShape(2.dp))
-                .padding(horizontal = 0.dp)
-                .let {
-                    // translate the 10dp bar across the 40dp track via offset
-                    it.offset(x = (progress * 30).dp, y = 0.dp)
-                },
+                .offset(x = (progress * 30).dp, y = 0.dp),
         )
     }
 }
 
 @Composable
 private fun PulseDot(color: Color) {
-    val t = DesignTokens
     val transition = rememberInfiniteTransition(label = "pulse")
     val alpha by transition.animateFloat(
         initialValue = 0.35f,
@@ -328,11 +363,7 @@ private fun PulseDot(color: Color) {
         ),
         label = "pulse-alpha",
     )
-    Box(
-        Modifier
-            .size(8.dp)
-            .background(color.copy(alpha = alpha), CircleShape),
-    )
+    Box(Modifier.size(8.dp).background(color.copy(alpha = alpha), CircleShape))
 }
 
 @Composable
@@ -341,38 +372,127 @@ private fun IdleDot(color: Color) {
 }
 
 // ---------------------------------------------------------------------------
-// Band 3: needs-you stack
+// Band 3: live activity feed (real bus events)
 // ---------------------------------------------------------------------------
 
-/**
- * Single most-urgent decision the human must make. Cards here are risk-tiered
- * (critical first); the full queue lives on the Approvals screen.
- */
 @Composable
-private fun NeedsYouStack() {
-    val t = DesignTokens
+private fun SectionHeader(title: String, trailing: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = DesignTokens.Chrome.TextSecondary)
+        Spacer(Modifier.weight(1f))
+        Text(trailing, style = MaterialTheme.typography.labelSmall, color = DesignTokens.Chrome.TextFaint)
+    }
+}
+
+@Composable
+private fun ActivityRow(event: ObservatoryEvent) {
+    val (label, color) = when (event.kind) {
+        ObservatoryEventKind.Task -> "task" to DesignTokens.Status.Waiting
+        ObservatoryEventKind.Result -> "result" to DesignTokens.Status.Ok
+        ObservatoryEventKind.CronResult -> "cron" to DesignTokens.Status.Working
+        ObservatoryEventKind.Approval -> "approval" to DesignTokens.Status.Critical
+        ObservatoryEventKind.Info -> "fyi" to DesignTokens.Chrome.TextFaint
+    }
+    Surface(
+        shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
+        color = DesignTokens.Surfaces.Surface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = RoundedCornerShape(4.dp), color = color.copy(alpha = 0.16f)) {
+                    Text(
+                        " $label ",
+                        Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = color,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "${event.fromBot} → ${event.toBot}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = DesignTokens.Chrome.TextSecondary,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    event.timestamp.takeLast(9).trimStart('T'),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = DesignTokens.Chrome.TextFaint,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+            Text(
+                event.summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = DesignTokens.Chrome.Text,
+                maxLines = 2,
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Band 4: needs-you stack
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun NeedsYouStack(pending: List<ApprovalRequest>) {
     Column(verticalArrangement = Arrangement.spacedBy(DesignTokens.Density.StackGap.dp)) {
         Text("Needs you", style = MaterialTheme.typography.titleMedium, color = DesignTokens.Chrome.TextSecondary)
-        Surface(
-            shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
-            color = DesignTokens.Surfaces.Surface,
-            modifier = Modifier.border(width = 1.dp, color = DesignTokens.Status.Critical.copy(alpha = 0.5f), shape = RoundedCornerShape(DesignTokens.Shape.CardRadius)),
-        ) {
-            Column(Modifier.padding(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("CRITICAL", style = MaterialTheme.typography.labelSmall, color = DesignTokens.Status.Critical, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.width(8.dp))
-                    Text("sable · deletes build output", style = MaterialTheme.typography.bodyMedium)
+        val request = pending.sortedBy { if (it.risk == ApprovalRisk.Critical) 0 else 1 }.firstOrNull()
+        if (request == null) {
+            EmptyCard("Nothing needs you", "Pending approvals will surface here and in the Approvals inbox.")
+        } else {
+            Surface(
+                shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
+                color = DesignTokens.Surfaces.Surface,
+                modifier = Modifier.border(
+                    width = 1.dp,
+                    color = DesignTokens.Status.Critical.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
+                ),
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (request.risk == ApprovalRisk.Critical) "CRITICAL" else "CONFIRM",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = DesignTokens.Status.Critical,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(request.bot, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Text(
+                        request.command,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = DesignTokens.Chrome.TextSecondary,
+                    )
+                    Text(
+                        "Resolve in Approvals · ${request.corrId}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = DesignTokens.Chrome.TextFaint,
+                    )
                 }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "rm -rf /data/data/com.myapp/files/build/",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = DesignTokens.Chrome.TextSecondary,
-                )
-                // TODO: Approve/Deny buttons wire to the approval RPC (Phase 2).
             }
+        }
+    }
+}
+
+@Composable
+private fun EmptyCard(title: String, body: String) {
+    Surface(
+        shape = RoundedCornerShape(DesignTokens.Shape.CardRadius),
+        color = DesignTokens.Surfaces.SurfaceContainer,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, color = DesignTokens.Chrome.TextSecondary)
+            Text(body, style = MaterialTheme.typography.bodySmall, color = DesignTokens.Chrome.TextFaint)
         }
     }
 }

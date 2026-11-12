@@ -47,6 +47,12 @@ object BridgeRuntime {
     private val _actionFeedback = MutableStateFlow<ActionFeedback?>(null)
     val actionFeedback: StateFlow<ActionFeedback?> = _actionFeedback.asStateFlow()
 
+    private val feed = ObservatoryFeed()
+    private val _observatory = MutableStateFlow(ObservatoryUiState(online = false))
+
+    /** Live Observatory state (crew + pending approvals + recent bus events). */
+    val observatory: StateFlow<ObservatoryUiState> = _observatory.asStateFlow()
+
     /** Wire approval notifications (called once from Application). */
     fun setApprovalObserver(observer: ApprovalObserver?) {
         approvalObserver = observer
@@ -80,14 +86,28 @@ object BridgeRuntime {
         storeRef.set(store)
         streamRef.set(stream)
         stream.connect()
+        publishObservatory()
         refreshRoster()
     }
 
     private fun handleBridgeLine(store: BridgeEventStore, line: String) {
         store.onBridgeLine(line)
+        feed.ingest(line)
         val pending = store.pendingApprovals.value
         _pendingApprovals.value = pending
+        publishObservatory()
         approvalObserver?.onPending(pending)
+    }
+
+    private fun publishObservatory() {
+        val roster = _roster.value
+        _observatory.value = ObservatoryUiState(
+            online = roster?.online == true,
+            crew = roster?.bots.orEmpty(),
+            pending = _pendingApprovals.value,
+            events = feed.snapshot(),
+            error = roster?.error,
+        )
     }
 
     fun approve(corrId: String, onResult: (Result<Unit>) -> Unit = {}) =
@@ -104,6 +124,7 @@ object BridgeRuntime {
         scope.launch {
             val result = if (approve) store.approve(corrId) else store.deny(corrId)
             _pendingApprovals.value = store.pendingApprovals.value
+            publishObservatory()
             if (result.isSuccess) approvalObserver?.onResolved(corrId)
             onResult(result)
         }
@@ -127,6 +148,7 @@ object BridgeRuntime {
                 RosterSnapshot(online = false, error = t.message ?: "get_state failed")
             }
             _roster.value = snapshot
+            publishObservatory()
             onResult(
                 if (snapshot.online) Result.success(snapshot)
                 else Result.failure(IllegalStateException(snapshot.error ?: "botd offline")),
@@ -178,6 +200,8 @@ object BridgeRuntime {
         _roster.value = null
         _busyBot.value = null
         _actionFeedback.value = null
+        feed.clear()
+        publishObservatory()
     }
 
     private fun jsonString(value: String): String =

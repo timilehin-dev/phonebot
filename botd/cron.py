@@ -237,7 +237,24 @@ class CronScheduler:
 
         bot_name = job.get("bot", "")
         state = self.states.get(bot_name)
-        if state is not None:
+        payload = {
+            "job_id": job.get("id"),
+            "ok": bool(result.get("ok", True)),
+            "error": result.get("error"),
+            "result": result.get("result"),
+        }
+        if self.bus is not None:
+            # The bus already journals into the target's wakeup queue (and the
+            # chief's copy), so enqueueing here too would duplicate the event.
+            self.bus.post(
+                from_bot="cron",
+                to_bot=bot_name,
+                type_="cron_result",
+                payload=payload,
+                corr_id=job.get("id", ""),
+                priority="fyi",
+            )
+        elif state is not None:
             state.enqueue_wakeup(
                 {
                     "type": "cron_result",
@@ -245,27 +262,9 @@ class CronScheduler:
                     "to_bot": bot_name,
                     "corr_id": job.get("id", ""),
                     "priority": "fyi",
-                    "payload": {
-                        "job_id": job.get("id"),
-                        "ok": bool(result.get("ok", True)),
-                        "error": result.get("error"),
-                        "result": result.get("result"),
-                    },
+                    "payload": payload,
                     "timestamp": now.isoformat(timespec="seconds"),
                 }
-            )
-        if self.bus is not None:
-            self.bus.post(
-                from_bot="cron",
-                to_bot=bot_name,
-                type_="cron_result",
-                payload={
-                    "job_id": job.get("id"),
-                    "ok": bool(result.get("ok", True)),
-                    "error": result.get("error"),
-                },
-                corr_id=job.get("id", ""),
-                priority="fyi",
             )
 
 

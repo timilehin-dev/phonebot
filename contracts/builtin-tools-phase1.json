@@ -281,23 +281,37 @@
     "kind": "builtin",
     "provider": "botd",
     "name": "bus_publish",
-    "description": "Publish an event to the phonebot event bus. Phase 1: stub — events are logged to the invoking bot's trace stream only. Phase 2: full delivery to addressed bots' wakeup queues (cron_result, bot-to-bot messages).",
+    "description": "Publish a typed event to the phonebot bus: delivered to the target bot's durable wakeup queue (and the chief's copy). Use type=task/result to run bot-to-bot chains.",
     "input_schema": {
       "type": "object",
       "required": ["topic", "payload"],
       "properties": {
         "topic": {
           "type": "string",
-          "description": "Event topic, e.g. \"cron_result\", \"task_completed\"."
+          "description": "Target bot name, or \"*\" to broadcast."
         },
         "payload": {
           "type": "object",
           "description": "Event payload. Must be JSON-serializable and must not contain secret values."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["task", "result", "needs-approval", "fyi", "cron_result"],
+          "description": "Bus message type. Defaults to fyi."
+        },
+        "corr_id": {
+          "type": "string",
+          "description": "Correlator shared by a task and its result."
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["urgent", "fyi"],
+          "description": "urgent wakes the target bot immediately; fyi is drained on its next tick. Defaults to fyi."
         }
       }
     },
     "risk": "write",
-    "phase": 1,
+    "phase": 2,
     "default_allowed": true
   },
   {

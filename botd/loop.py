@@ -441,8 +441,18 @@ class AgentLoop:
             "type": "function",
             "function": {
                 "name": "bus_publish",
-                "description": "Publish a message to the bot message bus (Phase-1 stub).",
-                "parameters": {"type": "object", "properties": {"topic": {"type": "string"}, "payload": {"type": "object"}}, "required": ["topic", "payload"]},
+                "description": "Publish a typed event to another bot's bus queue (task/result/fyi/...).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {"type": "string"},
+                        "payload": {"type": "object"},
+                        "type": {"type": "string"},
+                        "corr_id": {"type": "string"},
+                        "priority": {"type": "string"},
+                    },
+                    "required": ["topic", "payload"],
+                },
             },
         },
         {

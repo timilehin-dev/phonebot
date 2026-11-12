@@ -386,12 +386,15 @@ class ToolRegistry:
         self.register(
             ToolDescriptor(
                 id="bus_publish",
-                description="Publish a message to the bot message bus (Phase-1 stub).",
+                description="Publish a typed event to another bot's bus queue (task/result/fyi/...).",
                 parameters={
                     "type": "object",
                     "properties": {
                         "topic": {"type": "string"},
                         "payload": {"type": "object"},
+                        "type": {"type": "string"},
+                        "corr_id": {"type": "string"},
+                        "priority": {"type": "string"},
                     },
                     "required": ["topic", "payload"],
                 },
@@ -578,13 +581,41 @@ class ToolRegistry:
         return {"ok": True, "approved": approved, "corr_id": corr_id}
 
     async def _h_bus_publish(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
-        """Phase-1 stub: enqueue a durable fyi event on the bus."""
-        topic = str(args.get("topic", ""))
-        payload = args.get("payload", {})
+        """Deliver a typed bot-to-bot event (Phase 2).
+
+        ``topic`` is the target bot (``"*"`` broadcasts); ``type`` defaults to
+        ``fyi`` and must be one of the bus message types. The bus journals into
+        the target's durable wakeup queue (and the chief's copy), so this is the
+        primitive that carries task/result chains between bots.
+        """
+        from ..bus import MESSAGE_TYPES, PRIORITIES
+
+        topic = str(args.get("topic") or "*")
+        payload = args.get("payload") or {}
+        if not isinstance(payload, dict):
+            return {"ok": False, "error": "payload must be an object"}
+        msg_type = str(args.get("type") or "fyi")
+        if msg_type not in MESSAGE_TYPES:
+            return {"ok": False, "error": f"unknown type {msg_type!r}"}
+        priority = str(args.get("priority") or "fyi")
+        if priority not in PRIORITIES:
+            return {"ok": False, "error": f"unknown priority {priority!r}"}
         if self.bus is None:
-            return {"ok": False, "stub": True, "error": "bus not wired; Phase 2"}
-        self.bus.post(ctx.bot_name, topic, "fyi", payload, priority="fyi")
-        return {"ok": True, "topic": topic, "delivered": True}
+            return {"ok": False, "error": "bus not wired"}
+        delivered = self.bus.post(
+            ctx.bot_name,
+            topic,
+            msg_type,
+            payload,
+            corr_id=str(args.get("corr_id") or ""),
+            priority=priority,
+        )
+        return {
+            "ok": bool(delivered),
+            "topic": topic,
+            "type": msg_type,
+            "delivered": bool(delivered),
+        }
 
     async def _h_list_inbox(self, args: Dict[str, Any], ctx: ToolContext) -> Dict[str, Any]:
         """Phase-1: read (without consuming) the durable wakeup journal for a bot."""

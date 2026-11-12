@@ -52,6 +52,9 @@ jobs:
       - name: Regression checks
         run: python test/regression_check.py
 
+      - name: Phase 2 chain + boot catch-up
+        run: python test/test_phase2_chain.py
+
   android-build:
     # Compiles the APK so Kotlin/Compose/AGP breakage fails the build, not
     # just the tag-time release workflow.
@@ -74,8 +77,8 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
-      - name: Assemble debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon
+      - name: Unit tests + assemble debug APK
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
